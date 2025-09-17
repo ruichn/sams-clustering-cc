@@ -41,10 +41,10 @@ Thumbs.db
 # Jupyter
 .ipynb_checkpoints
 
-# Results and plots
-*.png
-*.jpg
-*.jpeg
+# Results and plots (keep experiment results)
+# *.png
+# *.jpg
+# *.jpeg
 
 # Temporary files
 *.tmp
