@@ -64,6 +64,21 @@ new_modes[i] = modes[i] + step_size * gradient
 
 ## Experimental Results
 
+![Dataset Performance Comparison](plots/experiment1_results.png)
+*Figure 1: SAMS performance on different dataset types compared to standard mean-shift*
+
+![Scalability Analysis](plots/experiment2_scalability.png)
+*Figure 2: Runtime and clustering quality scaling with dataset size*
+
+![Parameter Sensitivity](plots/experiment3_sensitivity.png)
+*Figure 3: Effects of bandwidth and sample fraction parameters*
+
+![Image Segmentation Results](plots/image_segmentation_results.png)
+*Figure 4: Image segmentation using different feature extraction methods*
+
+![Color Image Segmentation](plots/color_segmentation_results.png)
+*Figure 5: RGB color image segmentation with 5D features*
+
 ### Dataset Performance
 | Dataset Type | SAMS ARI | Mean-Shift ARI | SAMS Time | MS Time |
 |-------------|----------|----------------|-----------|---------|
