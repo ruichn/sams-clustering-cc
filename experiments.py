@@ -57,8 +57,8 @@ def run_experiment_1():
         # Generate data
         X, y_true = generate_test_data(n_samples=n_samples, dataset_type=dataset_type)
         
-        # SAMS clustering
-        sams = SAMS_Clustering(bandwidth=0.5, sample_fraction=0.01, max_iter=500)
+        # SAMS clustering with data-driven bandwidth
+        sams = SAMS_Clustering(bandwidth=None, sample_fraction=0.01, max_iter=500)
         start_time = time.time()
         labels_sams, modes_sams = sams.fit_predict(X)
         sams_time = time.time() - start_time
@@ -67,14 +67,14 @@ def run_experiment_1():
         X_small = X[:200]  # Use smaller subset for standard mean-shift
         y_true_small = y_true[:200]
         
-        ms = StandardMeanShift(bandwidth=0.5, max_iter=200)
+        ms = StandardMeanShift(bandwidth=sams.bandwidth, max_iter=200)  # Use same bandwidth
         start_time = time.time()
         labels_ms, modes_ms = ms.fit_predict(X_small)
         ms_time = time.time() - start_time
         
         # Evaluate
-        ari_sams, _, n_clusters_sams = evaluate_clustering(y_true, labels_sams)
-        ari_ms, _, n_clusters_ms = evaluate_clustering(y_true_small, labels_ms)
+        ari_sams, nmi_sams, n_clusters_sams = evaluate_clustering(y_true, labels_sams)
+        ari_ms, nmi_ms, n_clusters_ms = evaluate_clustering(y_true_small, labels_ms)
         
         # Store results
         results.append({
@@ -97,7 +97,7 @@ def run_experiment_1():
         plot_clustering_results(X_small, labels_ms, modes_ms,
                               f'Mean-Shift - {dataset_type}\nARI: {ari_ms:.3f}', axes[i, 2])
         
-        print(f"SAMS - ARI: {ari_sams:.3f}, NMI: {nmi_sams:.3f}, Time: {sams_time:.3f}s, Clusters: {n_clusters_sams}")
+        print(f"SAMS - ARI: {ari_sams:.3f}, NMI: {nmi_sams:.3f}, Time: {sams_time:.3f}s, Clusters: {n_clusters_sams}, Bandwidth: {sams.bandwidth:.3f}")
         print(f"Mean-Shift - ARI: {ari_ms:.3f}, NMI: {nmi_ms:.3f}, Time: {ms_time:.3f}s, Clusters: {n_clusters_ms}")
     
     plt.tight_layout()
@@ -128,8 +128,8 @@ def run_experiment_2():
         # Generate data
         X, y_true = generate_test_data(n_samples=n_samples, dataset_type='blobs')
         
-        # SAMS clustering
-        sams = SAMS_Clustering(bandwidth=0.5, sample_fraction=sample_fractions[i], 
+        # SAMS clustering with data-driven bandwidth
+        sams = SAMS_Clustering(bandwidth=None, sample_fraction=sample_fractions[i], 
                               max_iter=300)
         
         start_time = time.time()
