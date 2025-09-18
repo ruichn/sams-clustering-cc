@@ -101,7 +101,7 @@ def run_experiment_1():
         print(f"Mean-Shift - ARI: {ari_ms:.3f}, NMI: {nmi_ms:.3f}, Time: {ms_time:.3f}s, Clusters: {n_clusters_ms}")
     
     plt.tight_layout()
-    plt.savefig('/Users/ruichen/Projects/paper-implementation/experiment1_results.png', dpi=300, bbox_inches='tight')
+    plt.savefig('/Users/ruichen/Projects/paper-implementation/plots/experiment1_results.png', dpi=300, bbox_inches='tight')
     plt.close()
     
     return results
@@ -161,7 +161,7 @@ def run_experiment_2():
     ax2.set_ylim([0, 1])
     
     plt.tight_layout()
-    plt.savefig('/Users/ruichen/Projects/paper-implementation/experiment2_scalability.png', dpi=300, bbox_inches='tight')
+    plt.savefig('/Users/ruichen/Projects/paper-implementation/plots/experiment2_scalability.png', dpi=300, bbox_inches='tight')
     plt.close()
     
     return sample_sizes, sams_times, sams_aris
@@ -253,7 +253,7 @@ def run_experiment_3():
     ax4.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    plt.savefig('/Users/ruichen/Projects/paper-implementation/experiment3_sensitivity.png', dpi=300, bbox_inches='tight')
+    plt.savefig('/Users/ruichen/Projects/paper-implementation/plots/experiment3_sensitivity.png', dpi=300, bbox_inches='tight')
     plt.close()
     
     return bandwidth_results, fraction_results

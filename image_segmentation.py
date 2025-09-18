@@ -184,7 +184,7 @@ def run_image_segmentation_experiment():
             })
     
     plt.tight_layout()
-    plt.savefig('/Users/ruichen/Projects/paper-implementation/image_segmentation_results.png', 
+    plt.savefig('/Users/ruichen/Projects/paper-implementation/plots/image_segmentation_results.png', 
                 dpi=300, bbox_inches='tight')
     plt.close()
     
@@ -285,7 +285,7 @@ def run_color_image_segmentation():
     axes[1].axis('off')
     
     plt.tight_layout()
-    plt.savefig('/Users/ruichen/Projects/paper-implementation/color_segmentation_results.png', 
+    plt.savefig('/Users/ruichen/Projects/paper-implementation/plots/color_segmentation_results.png', 
                 dpi=300, bbox_inches='tight')
     plt.close()
     
