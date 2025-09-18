@@ -13,15 +13,16 @@ class SAMS_Clustering:
     stochastic approximation as described in Hyrien & Baran (2017).
     """
     
-    def __init__(self, bandwidth=1.0, sample_fraction=0.01, max_iter=1000, 
-                 tol=1e-4, kernel='gaussian'):
+    def __init__(self, bandwidth=None, sample_fraction=0.01, max_iter=1000, 
+                 tol=1e-4, kernel='gaussian', alpha1=None, alpha2=None):
         """
         Initialize SAMS clustering algorithm.
         
         Parameters:
         -----------
-        bandwidth : float
-            Bandwidth parameter for kernel density estimation
+        bandwidth : float or None
+            Bandwidth parameter for kernel density estimation. If None, 
+            will be computed using data-driven method from paper.
         sample_fraction : float
             Fraction of data to sample at each iteration (0.1% - 1% recommended)
         max_iter : int
@@ -30,12 +31,18 @@ class SAMS_Clustering:
             Convergence tolerance
         kernel : str
             Kernel type ('gaussian' or 'epanechnikov')
+        alpha1 : float or None
+            Parameter for data-driven bandwidth selection. If None, uses σ^n^(-1/(p+4))
+        alpha2 : float or None
+            Parameter for pilot density sensitivity. If None, uses 1/p (Breiman et al.)
         """
         self.bandwidth = bandwidth
         self.sample_fraction = sample_fraction
         self.max_iter = max_iter
         self.tol = tol
         self.kernel = kernel
+        self.alpha1 = alpha1
+        self.alpha2 = alpha2
         
     def gaussian_kernel(self, x, xi, h):
         """Gaussian kernel function"""
@@ -95,6 +102,61 @@ class SAMS_Clustering:
         
         return gradient
     
+    def compute_pilot_density(self, X, h_pilot):
+        """
+        Compute pilot density estimate for data-driven bandwidth selection.
+        """
+        n_samples, _ = X.shape
+        pilot_densities = np.zeros(n_samples)
+        
+        for i in range(n_samples):
+            # Use kernel density estimation for pilot density
+            weights = self.kernel_function(X[i].reshape(1, -1), X, h_pilot)
+            pilot_densities[i] = np.mean(weights)
+        
+        return pilot_densities
+    
+    def compute_data_driven_bandwidth(self, X):
+        """
+        Compute data-driven bandwidth according to Hyrien & Baran (2017).
+        
+        Formula: hi = λi * α1
+        where λi = (β^ / f~(yi))^α2
+        and β^ = geometric mean of pilot densities
+        """
+        n_samples, n_features = X.shape
+        
+        # Set default parameters if not provided
+        if self.alpha1 is None:
+            # Rule of thumb: σ^n^(-1/(p+4))
+            sample_var = np.var(X, axis=0).mean()
+            self.alpha1 = (sample_var * n_samples)**(-1.0 / (n_features + 4))
+        
+        if self.alpha2 is None:
+            # Breiman et al. recommendation: 1/p
+            self.alpha2 = 1.0 / n_features
+        
+        # Use simple rule-of-thumb for pilot bandwidth
+        h_pilot = 1.06 * np.std(X, axis=0).mean() * (n_samples**(-1.0/5))
+        
+        # Compute pilot density estimates
+        pilot_densities = self.compute_pilot_density(X, h_pilot)
+        
+        # Avoid zero densities
+        pilot_densities = np.maximum(pilot_densities, 1e-10)
+        
+        # Compute geometric mean (β^)
+        beta_hat = np.exp(np.mean(np.log(pilot_densities)))
+        
+        # Compute adaptive bandwidth multipliers (λi)
+        lambda_i = (beta_hat / pilot_densities) ** self.alpha2
+        
+        # Compute final bandwidths
+        bandwidths = lambda_i * self.alpha1
+        
+        # Use median bandwidth for global bandwidth
+        return np.median(bandwidths)
+    
     def fit_predict(self, X):
         """
         Perform SAMS clustering on data X.
@@ -113,6 +175,11 @@ class SAMS_Clustering:
         """
         X = np.array(X)
         n_samples, n_features = X.shape
+        
+        # Compute data-driven bandwidth if not provided
+        if self.bandwidth is None:
+            self.bandwidth = self.compute_data_driven_bandwidth(X)
+            print(f"Data-driven bandwidth selected: {self.bandwidth:.4f}")
         
         # Initialize modes for each data point
         modes = X.copy()
