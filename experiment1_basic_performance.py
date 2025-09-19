@@ -61,6 +61,10 @@ def run_corrected_experiment_1():
                 labels_sams, _ = sams.fit_predict(X)
                 sams_time = time.time() - start_time
                 
+                # For the first trial of each configuration, plot the clustering result
+                if trial == 0:
+                    plot_clustering_result(X, labels_sams, config, sample_frac)
+                
                 # Standard Mean-Shift - use SAME bandwidth and SAME dataset
                 ms = StandardMeanShift(bandwidth=sams.bandwidth, max_iter=200, tol=1e-4)
                 
@@ -165,6 +169,34 @@ def analyze_comparison_results(results):
     # Create fair comparison visualization
     plot_fair_comparison(results)
 
+def plot_clustering_result(X, labels, config, sample_frac):
+    """Plots the scatter plot of data points colored by cluster assignment."""
+    plt.figure(figsize=(8, 6))
+    plt.scatter(X[:, 0], X[:, 1], c=labels, cmap='viridis', s=10, alpha=0.8)
+    
+    n_clusters = len(np.unique(labels))
+    
+    plt.title(f"SAMS Clustering Result for '{config['name']}'\n"
+              f"(n={config['size']}, sample={sample_frac*100:.0f}%, Clusters={n_clusters})")
+    plt.xlabel("Feature 1")
+    plt.ylabel("Feature 2")
+    plt.grid(True, alpha=0.3)
+    
+    # Create short filename
+    name_map = {
+        'Gaussian Mixture': 'gaussian',
+        'Mixed Density': 'mixed', 
+        'Large Dataset': 'large'
+    }
+    short_name = name_map.get(config['name'], config['name'].lower().replace(' ', '_'))
+    filename = f"exp1_sams_{short_name}.png"
+    save_path = f'/Users/ruichen/Projects/paper-implementation/plots/{filename}'
+    
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    
+    print(f"\n✓ SAMS clustering visualization saved to {save_path}")
+
 def plot_fair_comparison(results):
     """Create visualization of fair comparison results"""
     
@@ -231,11 +263,11 @@ def plot_fair_comparison(results):
     cbar.set_label('SAMS ARI')
     
     plt.tight_layout()
-    plt.savefig('/Users/ruichen/Projects/paper-implementation/plots/corrected_experiment1_fair_comparison.png', 
+    plt.savefig('/Users/ruichen/Projects/paper-implementation/plots/experiment1_performance_comparison.png', 
                 dpi=300, bbox_inches='tight')
     plt.close()
     
-    print(f"\n✓ Fair comparison plot saved to plots/corrected_experiment1_fair_comparison.png")
+    print(f"\n✓ Fair comparison plot saved to plots/experiment1_performance_comparison.png")
 
 if __name__ == "__main__":
     print("CORRECTED EXPERIMENTAL VALIDATION")
