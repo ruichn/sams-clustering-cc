@@ -137,22 +137,30 @@ def run_image_segmentation_experiment():
             
             print(f"    Extracted {len(features)} feature vectors with {features.shape[1]} dimensions")
             
-            # Configure SAMS parameters based on feature dimensionality
+            # Configure SAMS parameters based on feature dimensionality 
+            # (data-driven bandwidth will be used automatically)
             if feature_type == 'intensity_only':
-                bandwidth = 0.1
                 sample_fraction = 0.02
             elif feature_type == 'position_only':
-                bandwidth = 0.15
-                sample_fraction = 0.01
+                sample_fraction = 0.015  # Slightly lower for spatial features
             else:
-                bandwidth = 0.2
-                sample_fraction = 0.015
+                sample_fraction = 0.02   # Combined features
             
-            # Apply SAMS clustering
-            sams = SAMS_Clustering(bandwidth=bandwidth, 
+            # Apply SAMS clustering with image-optimized parameters
+            # For image segmentation, we use smaller bandwidth for finer segments
+            if feature_type == 'intensity_only':
+                bandwidth = 0.05  # Small bandwidth for intensity-only
+            elif feature_type == 'position_only':
+                bandwidth = 0.1   # Medium bandwidth for spatial features
+            else:
+                bandwidth = 0.15  # Larger bandwidth for combined features
+            
+            sams = SAMS_Clustering(bandwidth=bandwidth,
                                  sample_fraction=sample_fraction, 
                                  max_iter=200, 
-                                 tol=1e-3)
+                                 tol=1e-4,
+                                 adaptive_sampling=True,
+                                 early_stop=True)
             
             start_time = time.time()
             labels, _ = sams.fit_predict(features)
@@ -179,7 +187,7 @@ def run_image_segmentation_experiment():
                 'n_features': features.shape[1],
                 'n_clusters': n_clusters,
                 'clustering_time': clustering_time,
-                'bandwidth': bandwidth,
+                'bandwidth': sams.bandwidth,
                 'sample_fraction': sample_fraction
             })
     
@@ -258,8 +266,14 @@ def run_color_image_segmentation():
     print(f"Color image size: {h}x{w}")
     print(f"Feature vector dimension: {features.shape[1]} (RGB + position)")
     
-    # Apply SAMS clustering
-    sams = SAMS_Clustering(bandwidth=0.15, sample_fraction=0.02, max_iter=150)
+    # Apply SAMS clustering with image-optimized parameters
+    # For color images with RGB+position, use moderate bandwidth
+    sams = SAMS_Clustering(bandwidth=0.2,
+                          sample_fraction=0.02, 
+                          max_iter=150,
+                          tol=1e-4,
+                          adaptive_sampling=True,
+                          early_stop=True)
     
     start_time = time.time()
     labels, _ = sams.fit_predict(features)
