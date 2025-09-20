@@ -619,24 +619,54 @@ def create_clustering_plot(X, y_true, results):
 def create_data_distribution_plot(X, y_true, dataset_type, n_samples):
     """Create a detailed data distribution plot similar to experiment 1"""
     
-    # Simple basic scatter plot that should work
+    # Debug: Print data ranges for troubleshooting
+    print(f"Data shape: {X.shape}")
+    print(f"X range: [{X[:, 0].min():.3f}, {X[:, 0].max():.3f}]")
+    print(f"Y range: [{X[:, 1].min():.3f}, {X[:, 1].max():.3f}]")
+    print(f"y_true unique values: {np.unique(y_true)}")
+    
+    # Create DataFrame for better plotly handling
+    df = pd.DataFrame({
+        'Feature_1': X[:, 0],
+        'Feature_2': X[:, 1], 
+        'True_Cluster': y_true.astype(str)  # Convert to string for discrete colors
+    })
+    
+    # Use discrete colors for true clusters
     fig = px.scatter(
-        x=X[:, 0], 
-        y=X[:, 1], 
-        color=y_true,
-        color_continuous_scale='viridis',
+        df,
+        x='Feature_1', 
+        y='Feature_2', 
+        color='True_Cluster',
+        color_discrete_sequence=px.colors.qualitative.Set1,
         title=f"{dataset_type} Dataset Distribution (n={n_samples:,} points)",
-        labels={'x': 'Feature 1', 'y': 'Feature 2', 'color': 'True Cluster'}
+        labels={'Feature_1': 'Feature 1', 'Feature_2': 'Feature 2', 'True_Cluster': 'True Cluster'}
     )
     
     fig.update_traces(
         marker=dict(size=6, opacity=0.8, line=dict(width=0.5, color='white'))
     )
     
+    # Explicitly set axis ranges with some padding
+    x_margin = (X[:, 0].max() - X[:, 0].min()) * 0.1
+    y_margin = (X[:, 1].max() - X[:, 1].min()) * 0.1
+    
     fig.update_layout(
         plot_bgcolor='white',
         height=500,
-        font=dict(size=12)
+        font=dict(size=12),
+        xaxis=dict(
+            range=[X[:, 0].min() - x_margin, X[:, 0].max() + x_margin],
+            title="Feature 1",
+            showgrid=True,
+            gridcolor='lightgray'
+        ),
+        yaxis=dict(
+            range=[X[:, 1].min() - y_margin, X[:, 1].max() + y_margin],
+            title="Feature 2", 
+            showgrid=True,
+            gridcolor='lightgray'
+        )
     )
     
     return fig
@@ -649,14 +679,22 @@ def create_individual_clustering_plot(X, labels, method_name, result_info):
     runtime = result_info['time']
     bandwidth = result_info['bandwidth']
     
-    # Create basic scatter plot
+    # Create DataFrame for better plotly handling
+    df = pd.DataFrame({
+        'Feature_1': X[:, 0],
+        'Feature_2': X[:, 1], 
+        'Cluster': labels.astype(str)  # Convert to string for discrete colors
+    })
+    
+    # Use discrete colors for clusters
     fig = px.scatter(
-        x=X[:, 0], 
-        y=X[:, 1], 
-        color=labels,
-        color_continuous_scale='viridis',
+        df,
+        x='Feature_1', 
+        y='Feature_2', 
+        color='Cluster',
+        color_discrete_sequence=px.colors.qualitative.Set1,
         title=f"{method_name} - Clusters: {n_clusters}, Time: {runtime:.3f}s",
-        labels={'x': 'Feature 1', 'y': 'Feature 2', 'color': 'Cluster'}
+        labels={'Feature_1': 'Feature 1', 'Feature_2': 'Feature 2', 'Cluster': 'Cluster'}
     )
     
     fig.update_traces(
@@ -680,10 +718,26 @@ def create_individual_clustering_plot(X, labels, method_name, result_info):
             showlegend=True
         )
     
+    # Explicitly set axis ranges with some padding
+    x_margin = (X[:, 0].max() - X[:, 0].min()) * 0.1
+    y_margin = (X[:, 1].max() - X[:, 1].min()) * 0.1
+    
     fig.update_layout(
         plot_bgcolor='white',
         height=500,
-        font=dict(size=12)
+        font=dict(size=12),
+        xaxis=dict(
+            range=[X[:, 0].min() - x_margin, X[:, 0].max() + x_margin],
+            title="Feature 1",
+            showgrid=True,
+            gridcolor='lightgray'
+        ),
+        yaxis=dict(
+            range=[X[:, 1].min() - y_margin, X[:, 1].max() + y_margin],
+            title="Feature 2",
+            showgrid=True,
+            gridcolor='lightgray'
+        )
     )
     
     return fig
