@@ -144,7 +144,7 @@ def main():
     st.title("🔬 SAMS: Stochastic Approximation Mean-Shift Clustering Demo")
     st.markdown("### 🌐 **New!** Now with 3D Clustering Support")
     st.success("✨ Enhanced with 3D dataset types and interactive 3D visualizations!")
-    st.caption("✨ Auto-deployed from GitHub with matplotlib-only plotting")
+    st.caption("✨ Auto-deployed from GitHub with matplotlib-only plotting | Updated with 3D support!")
     st.markdown("""
     **Interactive simulation studies for:** *"Fast Nonparametric Density-Based Clustering of Large Data Sets Using a Stochastic Approximation Mean-Shift Algorithm"* by Hyrien & Baran (2017)
     
