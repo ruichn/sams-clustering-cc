@@ -135,16 +135,14 @@ class DemoSAMS:
 # Page configuration
 st.set_page_config(
     page_title="SAMS Clustering Demo",
-    page_icon="🔬",
+    page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 def main():
-    st.title("🔬 SAMS: Stochastic Approximation Mean-Shift Clustering Demo")
-    st.markdown("### 🌐 **New!** Now with 3D Clustering Support")
-    st.success("✨ Enhanced with 3D dataset types and interactive 3D visualizations!")
-    st.caption("✨ Auto-deployed from GitHub with matplotlib-only plotting | Updated with 3D support!")
+    st.title("SAMS: Stochastic Approximation Mean-Shift Clustering Demo")
+    st.markdown("Interactive demonstration of the SAMS clustering algorithm with 2D and 3D dataset support.")
     st.markdown("""
     **Interactive simulation studies for:** *"Fast Nonparametric Density-Based Clustering of Large Data Sets Using a Stochastic Approximation Mean-Shift Algorithm"* by Hyrien & Baran (2017)
     
@@ -155,10 +153,10 @@ def main():
     
     # Sidebar for simulation parameters
     with st.sidebar:
-        st.header("🎛️ Simulation Parameters")
+        st.header("Simulation Parameters")
         
         # Data generation parameters
-        st.subheader("📊 Data Generation")
+        st.subheader("Data Generation")
         
         # Dataset type
         dataset_type = st.selectbox(
@@ -267,7 +265,7 @@ def main():
                 help="Standard deviation of Gaussian clusters"
             )
         
-        st.subheader("⚙️ Algorithm Parameters")
+        st.subheader("Algorithm Parameters")
         
         # SAMS parameters
         st.markdown("**SAMS Configuration:**")
@@ -308,7 +306,7 @@ def main():
         )
         
         # Comparison options
-        st.subheader("📈 Comparison")
+        st.subheader("Comparison")
         compare_sklearn = st.checkbox(
             "Include Scikit-Learn Mean-Shift",
             value=True,
@@ -328,7 +326,7 @@ def main():
     col1, col2 = st.columns([2, 1])
     
     with col1:
-        st.subheader("🎯 Clustering Results")
+        st.subheader("Clustering Results")
         
         # Generate data button
         if st.button("🔄 Generate Data & Run Clustering", type="primary"):
@@ -364,7 +362,7 @@ def run_clustering_experiment(dataset_type, n_samples, n_centers, noise_level, c
             X, y_true = result
             original_image = None
     
-    st.success(f"✅ Generated {dataset_type} dataset with {n_samples:,} points")
+    st.success(f"Generated {dataset_type} dataset with {n_samples:,} points")
     
     # Run clustering methods
     results = {}
@@ -687,7 +685,7 @@ def display_results(X, y_true, results, dataset_type, sample_fraction, col1, col
     with col1:
         # Special handling for image segmentation
         if dataset_type == "Image Segmentation" and original_image is not None:
-            st.subheader("🖼️ Original Image")
+            st.subheader("Original Image")
             fig, ax = plt.subplots(figsize=(6, 6))
             ax.imshow(original_image, cmap='gray')
             ax.set_title("Synthetic Image for Segmentation")
@@ -696,12 +694,12 @@ def display_results(X, y_true, results, dataset_type, sample_fraction, col1, col
             plt.close(fig)
         
         # 1. Data Distribution Plot (similar to experiment 1)
-        st.subheader("🎯 Data Distribution")
+        st.subheader("Data Distribution")
         fig = create_data_distribution_plot(X, y_true, dataset_type, len(X))
         st.pyplot(fig)
         
         # 2. Individual clustering results
-        st.subheader("🔍 Clustering Results")
+        st.subheader("Clustering Results")
         for method_name, result in results.items():
             st.markdown(f"**{method_name}:**")
             if method_name == "SAMS":
@@ -714,23 +712,23 @@ def display_results(X, y_true, results, dataset_type, sample_fraction, col1, col
                 st.pyplot(fig)
         
         # 3. Side-by-side comparison
-        st.subheader("⚖️ Side-by-Side Comparison")
+        st.subheader("Side-by-Side Comparison")
         fig = create_clustering_plot(X, y_true, results)
         st.pyplot(fig)
         
         # 4. Performance metrics
-        st.subheader("📊 Performance Metrics")
+        st.subheader("Performance Metrics")
         metrics_df = calculate_metrics(X, y_true, results)
         st.dataframe(metrics_df, use_container_width=True)
         
         # 5. Runtime comparison if multiple methods
         if len(results) > 1:
-            st.subheader("⚡ Runtime Comparison")
+            st.subheader("Runtime Comparison")
             fig = create_runtime_plot(results)
             st.pyplot(fig)
     
     with col2:
-        st.subheader("📋 Experiment Summary")
+        st.subheader("Experiment Summary")
         
         # Dataset information
         st.info(f"""
@@ -744,7 +742,7 @@ def display_results(X, y_true, results, dataset_type, sample_fraction, col1, col
         """)
         
         # Method comparison
-        st.subheader("🎯 Results Summary")
+        st.subheader("Results Summary")
         
         sams_result = results.get('SAMS')
         sklearn_result = results.get('Scikit-Learn Mean-Shift')
@@ -753,7 +751,7 @@ def display_results(X, y_true, results, dataset_type, sample_fraction, col1, col
             speedup_text = ""
             if sklearn_result and sklearn_result['time'] > 0:
                 speedup = sklearn_result['time'] / sams_result['time']
-                speedup_text = f"\n\n🚀 **{speedup:.1f}x faster than sklearn**"
+                speedup_text = f"\n\n**{speedup:.1f}x faster than sklearn**"
             
             st.success(f"""
             **SAMS Performance**
@@ -998,7 +996,7 @@ def add_sidebar_info():
     """Add sidebar information"""
     with st.sidebar:
         st.markdown("---")
-        st.subheader("ℹ️ About SAMS")
+        st.subheader("About SAMS")
         st.markdown("""
         **Key Algorithm Features:**
         - **O(n) complexity** per iteration
@@ -1013,7 +1011,7 @@ def add_sidebar_info():
         """)
         
         st.markdown("---")
-        st.subheader("📚 Reference")
+        st.subheader("Reference")
         st.markdown("""
         Hyrien, O., & Baran, R. H. (2017). 
         *Fast Nonparametric Density-Based 
