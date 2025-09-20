@@ -10,6 +10,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
+from mpl_toolkits.mplot3d import Axes3D
 # Removed Plotly imports - using matplotlib only
 from scipy.spatial.distance import cdist
 # Removed dependency on external experiment module for Hugging Face deployment
@@ -160,9 +161,23 @@ def main():
         # Dataset type
         dataset_type = st.selectbox(
             "Dataset Type",
-            ["Gaussian Blobs", "Concentric Circles", "Two Moons", "Mixed Densities"],
+            ["Gaussian Blobs", "Concentric Circles", "Two Moons", "Mixed Densities", "3D Blobs", "3D Spheres"],
             help="Choose the type of synthetic dataset to generate"
         )
+        
+        # Number of dimensions
+        if dataset_type.startswith("3D"):
+            n_features = 3
+            st.info("🌐 **3D Dataset Selected** - Visualizations will show 3D scatter plots")
+        else:
+            n_features = st.selectbox(
+                "Number of Dimensions",
+                [2, 3],
+                index=0,
+                help="Choose 2D or 3D data dimensions"
+            )
+            if n_features == 3:
+                st.info("🌐 **3D Mode Enabled** - Visualizations will show 3D scatter plots")
         
         # Sample size
         n_samples = st.slider(
@@ -175,7 +190,7 @@ def main():
         )
         
         # Number of clusters (for applicable datasets)
-        if dataset_type in ["Gaussian Blobs", "Mixed Densities"]:
+        if dataset_type in ["Gaussian Blobs", "Mixed Densities", "3D Blobs"]:
             n_centers = st.slider(
                 "Number of Clusters",
                 min_value=2,
@@ -183,6 +198,8 @@ def main():
                 value=4,
                 help="Number of clusters in the dataset"
             )
+        elif dataset_type == "3D Spheres":
+            n_centers = 3  # Fixed for 3D spheres
         else:
             n_centers = 2  # Fixed for circles and moons
         
@@ -275,11 +292,11 @@ def main():
             run_clustering_experiment(dataset_type, n_samples, n_centers, noise_level,
                                     cluster_std if dataset_type == "Gaussian Blobs" else None,
                                     bandwidth, sample_fraction, max_iter, compare_sklearn, 
-                                    random_seed, col1, col2)
+                                    random_seed, col1, col2, n_features)
 
 def run_clustering_experiment(dataset_type, n_samples, n_centers, noise_level, cluster_std,
                             bandwidth, sample_fraction, max_iter, compare_sklearn, 
-                            random_seed, col1, col2):
+                            random_seed, col1, col2, n_features=2):
     """Run the complete clustering experiment"""
     
     # Set random seed
@@ -287,7 +304,7 @@ def run_clustering_experiment(dataset_type, n_samples, n_centers, noise_level, c
     
     # Generate dataset
     with st.spinner("Generating dataset..."):
-        X, y_true = generate_dataset(dataset_type, n_samples, n_centers, noise_level, cluster_std)
+        X, y_true = generate_dataset(dataset_type, n_samples, n_centers, noise_level, cluster_std, n_features)
     
     st.success(f"✅ Generated {dataset_type} dataset with {n_samples:,} points")
     
@@ -339,50 +356,150 @@ def run_clustering_experiment(dataset_type, n_samples, n_centers, noise_level, c
     # Display results
     display_results(X, y_true, results, dataset_type, sample_fraction, col1, col2)
 
-def generate_dataset(dataset_type, n_samples, n_centers, noise_level, cluster_std=None):
+def generate_dataset(dataset_type, n_samples, n_centers, noise_level, cluster_std=None, n_features=2):
     """Generate synthetic datasets based on user parameters"""
     
     if dataset_type == "Gaussian Blobs":
         X, y_true = make_blobs(
             n_samples=n_samples,
             centers=n_centers,
-            n_features=2,
+            n_features=n_features,
             cluster_std=cluster_std,
             random_state=42
         )
         # Add noise
         X += np.random.normal(0, noise_level, X.shape)
         
-    elif dataset_type == "Concentric Circles":
-        X, y_true = make_circles(
+    elif dataset_type == "3D Blobs":
+        X, y_true = make_blobs(
             n_samples=n_samples,
-            noise=noise_level,
-            factor=0.6,
+            centers=n_centers,
+            n_features=3,
+            cluster_std=1.2,
+            center_box=(-4, 4),
             random_state=42
         )
+        # Add noise
+        X += np.random.normal(0, noise_level, X.shape)
+        
+    elif dataset_type == "3D Spheres":
+        # Generate concentric 3D spheres
+        np.random.seed(42)
+        
+        # Inner sphere (cluster 0)
+        n_inner = n_samples // 3
+        inner_r = np.random.uniform(1.0, 2.0, n_inner)
+        inner_theta = np.random.uniform(0, 2*np.pi, n_inner)
+        inner_phi = np.random.uniform(0, np.pi, n_inner)
+        
+        inner_x = inner_r * np.sin(inner_phi) * np.cos(inner_theta)
+        inner_y = inner_r * np.sin(inner_phi) * np.sin(inner_theta)
+        inner_z = inner_r * np.cos(inner_phi)
+        
+        # Middle sphere (cluster 1)
+        n_middle = n_samples // 3
+        middle_r = np.random.uniform(3.0, 3.8, n_middle)
+        middle_theta = np.random.uniform(0, 2*np.pi, n_middle)
+        middle_phi = np.random.uniform(0, np.pi, n_middle)
+        
+        middle_x = middle_r * np.sin(middle_phi) * np.cos(middle_theta)
+        middle_y = middle_r * np.sin(middle_phi) * np.sin(middle_theta)
+        middle_z = middle_r * np.cos(middle_phi)
+        
+        # Outer sphere (cluster 2)
+        n_outer = n_samples - n_inner - n_middle
+        outer_r = np.random.uniform(5.0, 6.0, n_outer)
+        outer_theta = np.random.uniform(0, 2*np.pi, n_outer)
+        outer_phi = np.random.uniform(0, np.pi, n_outer)
+        
+        outer_x = outer_r * np.sin(outer_phi) * np.cos(outer_theta)
+        outer_y = outer_r * np.sin(outer_phi) * np.sin(outer_theta)
+        outer_z = outer_r * np.cos(outer_phi)
+        
+        # Combine all spheres
+        X = np.vstack([
+            np.column_stack([inner_x, inner_y, inner_z]),
+            np.column_stack([middle_x, middle_y, middle_z]),
+            np.column_stack([outer_x, outer_y, outer_z])
+        ])
+        
+        y_true = np.hstack([
+            np.zeros(n_inner),
+            np.ones(n_middle),
+            np.full(n_outer, 2)
+        ])
+        
+        # Add noise
+        X += np.random.normal(0, noise_level, X.shape)
+        
+    elif dataset_type == "Concentric Circles":
+        if n_features == 3:
+            # Create 3D version of circles by extending to cylinder
+            X_2d, y_true = make_circles(
+                n_samples=n_samples,
+                noise=noise_level,
+                factor=0.6,
+                random_state=42
+            )
+            # Add z dimension with some variation
+            z = np.random.normal(0, 0.5, n_samples)
+            X = np.column_stack([X_2d, z])
+        else:
+            X, y_true = make_circles(
+                n_samples=n_samples,
+                noise=noise_level,
+                factor=0.6,
+                random_state=42
+            )
         
     elif dataset_type == "Two Moons":
-        X, y_true = make_moons(
-            n_samples=n_samples,
-            noise=noise_level,
-            random_state=42
-        )
+        if n_features == 3:
+            # Create 3D version of moons
+            X_2d, y_true = make_moons(
+                n_samples=n_samples,
+                noise=noise_level,
+                random_state=42
+            )
+            # Add z dimension with some variation
+            z = np.random.normal(0, 0.3, n_samples)
+            X = np.column_stack([X_2d, z])
+        else:
+            X, y_true = make_moons(
+                n_samples=n_samples,
+                noise=noise_level,
+                random_state=42
+            )
         
     elif dataset_type == "Mixed Densities":
         # Create clusters with different densities
         np.random.seed(42)
         
-        # High density cluster
-        n1 = n_samples // 3
-        cluster1 = np.random.multivariate_normal([0, 0], [[0.3, 0], [0, 0.3]], size=n1)
-        
-        # Medium density cluster  
-        n2 = n_samples // 3
-        cluster2 = np.random.multivariate_normal([3, 3], [[1.0, 0], [0, 1.0]], size=n2)
-        
-        # Low density cluster
-        n3 = n_samples - n1 - n2
-        cluster3 = np.random.multivariate_normal([-2, 2], [[1.8, 0], [0, 1.8]], size=n3)
+        if n_features == 3:
+            # 3D mixed densities
+            # High density cluster
+            n1 = n_samples // 3
+            cluster1 = np.random.multivariate_normal([0, 0, 0], np.eye(3) * 0.3, size=n1)
+            
+            # Medium density cluster  
+            n2 = n_samples // 3
+            cluster2 = np.random.multivariate_normal([3, 3, 1], np.eye(3) * 1.0, size=n2)
+            
+            # Low density cluster
+            n3 = n_samples - n1 - n2
+            cluster3 = np.random.multivariate_normal([-2, 2, -1], np.eye(3) * 1.8, size=n3)
+        else:
+            # 2D mixed densities
+            # High density cluster
+            n1 = n_samples // 3
+            cluster1 = np.random.multivariate_normal([0, 0], [[0.3, 0], [0, 0.3]], size=n1)
+            
+            # Medium density cluster  
+            n2 = n_samples // 3
+            cluster2 = np.random.multivariate_normal([3, 3], [[1.0, 0], [0, 1.0]], size=n2)
+            
+            # Low density cluster
+            n3 = n_samples - n1 - n2
+            cluster3 = np.random.multivariate_normal([-2, 2], [[1.8, 0], [0, 1.8]], size=n3)
         
         X = np.vstack([cluster1, cluster2, cluster3])
         y_true = np.hstack([np.zeros(n1), np.ones(n2), np.full(n3, 2)])
@@ -496,43 +613,63 @@ def display_results(X, y_true, results, dataset_type, sample_fraction, col1, col
                 pass
 
 def create_clustering_plot(X, y_true, results):
-    """Create clustering visualization using matplotlib like experiment 1 results"""
+    """Create clustering visualization using matplotlib with 3D support"""
     
     n_methods = len(results) + 1  # +1 for true clusters
     n_cols = min(3, n_methods)
     n_rows = (n_methods + n_cols - 1) // n_cols
     
-    fig = plt.figure(figsize=(12, 6 * n_rows))
-    gs = GridSpec(n_rows, n_cols, figure=fig, hspace=0.3, wspace=0.3)
+    is_3d = X.shape[1] == 3
+    fig_height = 8 if is_3d else 6
+    fig = plt.figure(figsize=(12, fig_height * n_rows))
     
     # Plot True clusters
-    ax = fig.add_subplot(gs[0, 0])
-    scatter = ax.scatter(X[:, 0], X[:, 1], c=y_true, cmap='viridis', s=10, alpha=0.8)
+    if is_3d:
+        ax = fig.add_subplot(n_rows, n_cols, 1, projection='3d')
+        scatter = ax.scatter(X[:, 0], X[:, 1], X[:, 2], c=y_true, cmap='viridis', s=20, alpha=0.7)
+        ax.set_xlabel("Feature 1")
+        ax.set_ylabel("Feature 2")
+        ax.set_zlabel("Feature 3")
+    else:
+        ax = fig.add_subplot(n_rows, n_cols, 1)
+        scatter = ax.scatter(X[:, 0], X[:, 1], c=y_true, cmap='viridis', s=10, alpha=0.8)
+        ax.set_xlabel("Feature 1")
+        ax.set_ylabel("Feature 2")
+        ax.grid(True, alpha=0.3)
+    
     ax.set_title(f"True Clusters (n={len(X):,})")
-    ax.set_xlabel("Feature 1")
-    ax.set_ylabel("Feature 2")
-    ax.grid(True, alpha=0.3)
     
     # Plot method results
-    plot_idx = 1
+    plot_idx = 2
     for method_name, result in results.items():
-        row = plot_idx // n_cols
-        col = plot_idx % n_cols
-        
-        ax = fig.add_subplot(gs[row, col])
-        scatter = ax.scatter(X[:, 0], X[:, 1], c=result['labels'], cmap='viridis', s=10, alpha=0.8)
-        
-        # Add cluster centers
-        if result['centers'] is not None and len(result['centers']) > 0:
-            ax.scatter(result['centers'][:, 0], result['centers'][:, 1], 
-                      c='red', marker='x', s=100, linewidths=3)
+        if is_3d:
+            ax = fig.add_subplot(n_rows, n_cols, plot_idx, projection='3d')
+            scatter = ax.scatter(X[:, 0], X[:, 1], X[:, 2], c=result['labels'], cmap='viridis', s=20, alpha=0.7)
+            
+            # Add cluster centers for 3D
+            if result['centers'] is not None and len(result['centers']) > 0 and result['centers'].shape[1] == 3:
+                ax.scatter(result['centers'][:, 0], result['centers'][:, 1], result['centers'][:, 2],
+                          c='red', marker='x', s=100, linewidths=3)
+            
+            ax.set_xlabel("Feature 1")
+            ax.set_ylabel("Feature 2")
+            ax.set_zlabel("Feature 3")
+        else:
+            ax = fig.add_subplot(n_rows, n_cols, plot_idx)
+            scatter = ax.scatter(X[:, 0], X[:, 1], c=result['labels'], cmap='viridis', s=10, alpha=0.8)
+            
+            # Add cluster centers for 2D
+            if result['centers'] is not None and len(result['centers']) > 0:
+                ax.scatter(result['centers'][:, 0], result['centers'][:, 1], 
+                          c='red', marker='x', s=100, linewidths=3)
+            
+            ax.set_xlabel("Feature 1")
+            ax.set_ylabel("Feature 2")
+            ax.grid(True, alpha=0.3)
         
         n_clusters = result['n_clusters']
         runtime = result['time']
         ax.set_title(f"{method_name}\nClusters: {n_clusters}, Time: {runtime:.3f}s")
-        ax.set_xlabel("Feature 1")
-        ax.set_ylabel("Feature 2")
-        ax.grid(True, alpha=0.3)
         
         plot_idx += 1
     
@@ -541,10 +678,7 @@ def create_clustering_plot(X, y_true, results):
     return fig
 
 def plot_clustering_result_streamlit(X, labels, config_name, n_samples, sample_frac=None, return_fig=True):
-    """Modified plot_clustering_result that returns figure for Streamlit"""
-    fig, ax = plt.subplots(figsize=(8, 6))
-    scatter = ax.scatter(X[:, 0], X[:, 1], c=labels, cmap='viridis', s=10, alpha=0.8)
-    
+    """Modified plot_clustering_result that returns figure for Streamlit with 3D support"""
     n_clusters = len(np.unique(labels))
     
     if sample_frac is not None:
@@ -552,13 +686,32 @@ def plot_clustering_result_streamlit(X, labels, config_name, n_samples, sample_f
     else:
         title = f"Data Distribution for '{config_name}'\n(n={n_samples:,} points, True Clusters={n_clusters})"
     
-    ax.set_title(title)
-    ax.set_xlabel("Feature 1")
-    ax.set_ylabel("Feature 2")
-    ax.grid(True, alpha=0.3)
-    
-    # Add colorbar
-    plt.colorbar(scatter, ax=ax, label="Cluster ID")
+    # Check if data is 3D
+    if X.shape[1] == 3:
+        # 3D plot
+        fig = plt.figure(figsize=(10, 8))
+        ax = fig.add_subplot(111, projection='3d')
+        scatter = ax.scatter(X[:, 0], X[:, 1], X[:, 2], c=labels, cmap='viridis', s=20, alpha=0.7)
+        
+        ax.set_title(title)
+        ax.set_xlabel("Feature 1")
+        ax.set_ylabel("Feature 2")
+        ax.set_zlabel("Feature 3")
+        
+        # Add colorbar
+        plt.colorbar(scatter, ax=ax, label="Cluster ID", shrink=0.5)
+    else:
+        # 2D plot
+        fig, ax = plt.subplots(figsize=(8, 6))
+        scatter = ax.scatter(X[:, 0], X[:, 1], c=labels, cmap='viridis', s=10, alpha=0.8)
+        
+        ax.set_title(title)
+        ax.set_xlabel("Feature 1")
+        ax.set_ylabel("Feature 2")
+        ax.grid(True, alpha=0.3)
+        
+        # Add colorbar
+        plt.colorbar(scatter, ax=ax, label="Cluster ID")
     
     plt.tight_layout()
     return fig
