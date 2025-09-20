@@ -2,6 +2,10 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import sys
+import os
+# Add src directory to path for imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from sams_clustering import SAMS_Clustering
 import time
 
@@ -192,8 +196,10 @@ def run_image_segmentation_experiment():
             })
     
     plt.tight_layout()
-    plt.savefig('/Users/ruichen/Projects/paper-implementation/plots/image_segmentation_results.png', 
-                dpi=300, bbox_inches='tight')
+    # Use relative path from repository root
+    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    save_path = os.path.join(repo_root, 'plots', 'image_segmentation_results.png')
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.close()
     
     # Print summary results
@@ -299,8 +305,10 @@ def run_color_image_segmentation():
     axes[1].axis('off')
     
     plt.tight_layout()
-    plt.savefig('/Users/ruichen/Projects/paper-implementation/plots/color_segmentation_results.png', 
-                dpi=300, bbox_inches='tight')
+    # Use relative path from repository root
+    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    save_path = os.path.join(repo_root, 'plots', 'color_segmentation_results.png')
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.close()
     
     return clustering_time, n_clusters

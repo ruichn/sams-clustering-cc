@@ -4,6 +4,10 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import time
 from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score
+import sys
+import os
+# Add src directory to path for imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from sams_clustering import SAMS_Clustering, StandardMeanShift, generate_test_data
 
 def evaluate_clustering(labels_true, labels_pred):
@@ -238,8 +242,10 @@ def plot_scalability_comparison(results):
         ax4.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    plt.savefig('/Users/ruichen/Projects/paper-implementation/plots/corrected_experiment2_scalability.png', 
-                dpi=300, bbox_inches='tight')
+    # Use relative path from repository root
+    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    save_path = os.path.join(repo_root, 'plots', 'corrected_experiment2_scalability.png')
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.close()
     
     print(f"\n✓ Scalability analysis plot saved to plots/corrected_experiment2_scalability.png")
@@ -452,8 +458,10 @@ def plot_sample_fraction_analysis(results):
     ax4.set_xscale('log')
     
     plt.tight_layout()
-    plt.savefig('/Users/ruichen/Projects/paper-implementation/plots/corrected_experiment3_sample_fraction.png', 
-                dpi=300, bbox_inches='tight')
+    # Use relative path from repository root
+    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    save_path = os.path.join(repo_root, 'plots', 'corrected_experiment3_sample_fraction.png')
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.close()
     
     print(f"\n✓ Sample fraction analysis plot saved to plots/corrected_experiment3_sample_fraction.png")

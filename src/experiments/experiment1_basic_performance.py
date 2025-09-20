@@ -4,6 +4,10 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import time
 from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score
+import sys
+import os
+# Add src directory to path for imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from sams_clustering import SAMS_Clustering, StandardMeanShift, generate_test_data
 
 def evaluate_clustering(labels_true, labels_pred):
@@ -190,7 +194,10 @@ def plot_clustering_result(X, labels, config, sample_frac):
     }
     short_name = name_map.get(config['name'], config['name'].lower().replace(' ', '_'))
     filename = f"exp1_sams_{short_name}.png"
-    save_path = f'/Users/ruichen/Projects/paper-implementation/plots/{filename}'
+    # Use relative path from repository root
+    import os
+    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    save_path = os.path.join(repo_root, 'plots', filename)
     
     plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.close()
@@ -263,8 +270,11 @@ def plot_fair_comparison(results):
     cbar.set_label('SAMS ARI')
     
     plt.tight_layout()
-    plt.savefig('/Users/ruichen/Projects/paper-implementation/plots/experiment1_performance_comparison.png', 
-                dpi=300, bbox_inches='tight')
+    # Use relative path from repository root
+    import os
+    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    save_path = os.path.join(repo_root, 'plots', 'experiment1_performance_comparison.png')
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.close()
     
     print(f"\n✓ Fair comparison plot saved to plots/experiment1_performance_comparison.png")

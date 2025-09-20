@@ -4,6 +4,10 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import time
 from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score
+import sys
+import os
+# Add src directory to path for imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from sams_clustering import SAMS_Clustering, StandardMeanShift, generate_test_data
 
 def evaluate_clustering(labels_true, labels_pred):
