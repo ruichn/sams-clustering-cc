@@ -1,0 +1,89 @@
+name: Deploy to Hugging Face Spaces
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'app.py'
+      - 'requirements.txt' 
+      - 'README.md'
+      - 'LICENSE'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install git-lfs
+        run: |
+          curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash
+          sudo apt-get install git-lfs
+
+      - name: Configure git
+        run: |
+          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action"
+
+      - name: Deploy to Hugging Face
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git clone https://chnrui:$HF_TOKEN@huggingface.co/spaces/chnrui/sams-clustering-demo hf-space
+          
+          # Copy demo files to HF space
+          cp app.py hf-space/
+          cp requirements.txt hf-space/
+          cp LICENSE hf-space/
+          
+          # Create HF-specific README with metadata
+          cat > hf-space/README.md << 'EOF'
+          ---
+          title: SAMS Clustering Demo
+          emoji: 🔬
+          colorFrom: blue
+          colorTo: green
+          sdk: streamlit
+          sdk_version: 1.28.1
+          app_file: app.py
+          pinned: false
+          license: mit
+          ---
+          
+          # 🔬 SAMS Clustering Interactive Demo
+          
+          An interactive web application for exploring the **Stochastic Approximation Mean-Shift (SAMS)** clustering algorithm.
+          
+          ## 🚀 Features
+          
+          - Interactive parameter controls for SAMS algorithm
+          - Multiple dataset types (Gaussian blobs, circles, moons, mixed densities)
+          - Real-time clustering visualization using matplotlib
+          - Performance comparison with scikit-learn mean-shift
+          - Experiment-style plotting with consistent styling
+          
+          ## 📍 GitHub Repository
+          
+          Full implementation with research validation: [github.com/ruichn/sams-clustering-cc](https://github.com/ruichn/sams-clustering-cc)
+          EOF
+          
+          cd hf-space
+          git add .
+          
+          # Check if there are any changes to commit
+          if ! git diff --staged --quiet; then
+            git commit -m "Auto-deploy from GitHub: $(date '+%Y-%m-%d %H:%M:%S')"
+            git push
+            echo "✅ Successfully deployed to Hugging Face Spaces"
+          else
+            echo "ℹ️ No changes detected, skipping deployment"
+          fi
