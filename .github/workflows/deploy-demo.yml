@@ -1,0 +1,41 @@
+name: Deploy Demo to Hugging Face Spaces
+
+on:
+  push:
+    branches: [ main ]
+    paths: 
+      - 'demo/**'
+      - '.github/workflows/deploy-demo.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+        lfs: true
+
+    - name: Push to Hugging Face Spaces
+      env:
+        HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      run: |
+        git config --global user.email "action@github.com"
+        git config --global user.name "GitHub Action"
+        
+        # Clone HF Space
+        git clone https://huggingface.co/spaces/chnrui/sams-clustering-demo hf-space
+        cd hf-space
+        
+        # Copy demo files
+        cp ../demo/app.py .
+        cp ../demo/requirements.txt .
+        cp ../demo/README.md .
+        
+        # Configure git with token
+        git remote set-url origin https://chnrui:$HF_TOKEN@huggingface.co/spaces/chnrui/sams-clustering-demo
+        
+        # Commit and push
+        git add .
+        git commit -m "Auto-deploy from GitHub: ${{ github.sha }}" || exit 0
+        git push
