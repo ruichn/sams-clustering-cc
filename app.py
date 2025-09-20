@@ -163,7 +163,7 @@ def main():
         # Dataset type
         dataset_type = st.selectbox(
             "Dataset Type",
-            ["Gaussian Blobs", "Concentric Circles", "Two Moons", "Mixed Densities", "3D Blobs", "3D Spheres"],
+            ["Gaussian Blobs", "Concentric Circles", "Two Moons", "Mixed Densities", "3D Blobs", "3D Spheres", "Image Segmentation"],
             help="Choose the type of synthetic dataset to generate"
         )
         
@@ -171,6 +171,27 @@ def main():
         if dataset_type.startswith("3D"):
             n_features = 3
             st.info("🌐 **3D Dataset Selected** - Visualizations will show 3D scatter plots")
+        elif dataset_type == "Image Segmentation":
+            n_features = st.selectbox(
+                "Feature Type",
+                ["Intensity + Position (3D)", "Intensity Only (1D)", "Position Only (2D)", "Intensity + Gradient (2D)"],
+                index=0,
+                help="Choose feature extraction method for image segmentation"
+            )
+            # Map UI selection to internal format
+            if n_features == "Intensity + Position (3D)":
+                feature_type = "intensity_position"
+                n_features = 3
+            elif n_features == "Intensity Only (1D)":
+                feature_type = "intensity_only"
+                n_features = 1
+            elif n_features == "Position Only (2D)":
+                feature_type = "position_only"
+                n_features = 2
+            else:  # Intensity + Gradient
+                feature_type = "intensity_gradient"
+                n_features = 2
+            st.info("🖼️ **Image Segmentation** - Clustering pixels based on visual features")
         else:
             n_features = st.selectbox(
                 "Number of Dimensions",
@@ -202,6 +223,26 @@ def main():
             )
         elif dataset_type == "3D Spheres":
             n_centers = 3  # Fixed for 3D spheres
+        elif dataset_type == "Image Segmentation":
+            col1, col2 = st.columns(2)
+            with col1:
+                image_size = st.selectbox(
+                    "Image Size",
+                    ["40x40", "60x60", "80x80"],
+                    index=1,
+                    help="Size of synthetic image to generate"
+                )
+            with col2:
+                n_centers = st.slider(
+                    "Image Regions",
+                    min_value=3,
+                    max_value=5,
+                    value=4,
+                    help="Number of distinct regions in the image"
+                )
+            # Parse image size
+            img_width, img_height = map(int, image_size.split('x'))
+            n_samples = img_width * img_height  # Override sample size for images
         else:
             n_centers = 2  # Fixed for circles and moons
         
@@ -291,14 +332,20 @@ def main():
         
         # Generate data button
         if st.button("🔄 Generate Data & Run Clustering", type="primary"):
+            # Pass additional parameters for image segmentation
+            extra_params = {}
+            if dataset_type == "Image Segmentation":
+                extra_params['feature_type'] = feature_type
+                extra_params['image_size'] = (img_height, img_width)
+            
             run_clustering_experiment(dataset_type, n_samples, n_centers, noise_level,
                                     cluster_std if dataset_type == "Gaussian Blobs" else None,
                                     bandwidth, sample_fraction, max_iter, compare_sklearn, 
-                                    random_seed, col1, col2, n_features)
+                                    random_seed, col1, col2, n_features, extra_params)
 
 def run_clustering_experiment(dataset_type, n_samples, n_centers, noise_level, cluster_std,
                             bandwidth, sample_fraction, max_iter, compare_sklearn, 
-                            random_seed, col1, col2, n_features=2):
+                            random_seed, col1, col2, n_features=2, extra_params=None):
     """Run the complete clustering experiment"""
     
     # Set random seed
@@ -306,7 +353,16 @@ def run_clustering_experiment(dataset_type, n_samples, n_centers, noise_level, c
     
     # Generate dataset
     with st.spinner("Generating dataset..."):
-        X, y_true = generate_dataset(dataset_type, n_samples, n_centers, noise_level, cluster_std, n_features)
+        if extra_params is None:
+            extra_params = {}
+        result = generate_dataset(dataset_type, n_samples, n_centers, noise_level, cluster_std, n_features, **extra_params)
+        
+        # Handle different return types (image segmentation returns 3 values)
+        if len(result) == 3:
+            X, y_true, original_image = result
+        else:
+            X, y_true = result
+            original_image = None
     
     st.success(f"✅ Generated {dataset_type} dataset with {n_samples:,} points")
     
@@ -356,9 +412,81 @@ def run_clustering_experiment(dataset_type, n_samples, n_centers, noise_level, c
                 st.warning(f"Scikit-Learn Mean-Shift failed: {str(e)}")
     
     # Display results
-    display_results(X, y_true, results, dataset_type, sample_fraction, col1, col2)
+    display_results(X, y_true, results, dataset_type, sample_fraction, col1, col2, original_image)
 
-def generate_dataset(dataset_type, n_samples, n_centers, noise_level, cluster_std=None, n_features=2):
+def generate_synthetic_image(size=(60, 60), n_regions=4, noise_level=0.05):
+    """Generate synthetic image for segmentation testing"""
+    # Create different regions with varying intensities
+    image = np.zeros(size)
+    
+    if n_regions == 4:
+        # Four quadrant regions
+        image[0:size[0]//2, 0:size[1]//2] = 0.8  # Top-left: bright
+        image[0:size[0]//2, size[1]//2:] = 0.3   # Top-right: dark
+        image[size[0]//2:, 0:size[1]//2] = 0.6   # Bottom-left: medium
+        image[size[0]//2:, size[1]//2:] = 0.9    # Bottom-right: very bright
+    
+    elif n_regions == 3:
+        # Three circular regions
+        center1 = (size[0]//4, size[1]//4)
+        center2 = (3*size[0]//4, size[1]//4)
+        center3 = (size[0]//2, 3*size[1]//4)
+        
+        for i in range(size[0]):
+            for j in range(size[1]):
+                dist1 = np.sqrt((i - center1[0])**2 + (j - center1[1])**2)
+                dist2 = np.sqrt((i - center2[0])**2 + (j - center2[1])**2)
+                dist3 = np.sqrt((i - center3[0])**2 + (j - center3[1])**2)
+                
+                min_dist = min(dist1, dist2, dist3)
+                if min_dist == dist1:
+                    image[i, j] = 0.8
+                elif min_dist == dist2:
+                    image[i, j] = 0.4
+                else:
+                    image[i, j] = 0.6
+    
+    elif n_regions == 5:
+        # Five random regions
+        np.random.seed(42)
+        regions = np.random.choice(5, size=size) * 0.2
+        image = regions
+    
+    # Add noise
+    noise = np.random.normal(0, noise_level, size)
+    image = np.clip(image + noise, 0, 1)
+    
+    return image
+
+def extract_features_from_image(image, feature_type='intensity_position'):
+    """Extract features from image for clustering"""
+    h, w = image.shape
+    features = []
+    
+    for i in range(h):
+        for j in range(w):
+            if feature_type == 'intensity_only':
+                # Only pixel intensity
+                features.append([image[i, j]])
+            elif feature_type == 'position_only':
+                # Only spatial position (normalized)
+                features.append([i/h, j/w])
+            elif feature_type == 'intensity_position':
+                # Both intensity and spatial position
+                features.append([image[i, j], i/h, j/w])
+            elif feature_type == 'intensity_gradient':
+                # Intensity and local gradient
+                if i > 0 and i < h-1 and j > 0 and j < w-1:
+                    grad_x = image[i, j+1] - image[i, j-1]
+                    grad_y = image[i+1, j] - image[i-1, j]
+                    gradient_mag = np.sqrt(grad_x**2 + grad_y**2)
+                    features.append([image[i, j], gradient_mag])
+                else:
+                    features.append([image[i, j], 0])
+    
+    return np.array(features)
+
+def generate_dataset(dataset_type, n_samples, n_centers, noise_level, cluster_std=None, n_features=2, feature_type=None, image_size=None):
     """Generate synthetic datasets based on user parameters"""
     
     if dataset_type == "Gaussian Blobs":
@@ -509,16 +637,64 @@ def generate_dataset(dataset_type, n_samples, n_centers, noise_level, cluster_st
         # Add noise
         X += np.random.normal(0, noise_level, X.shape)
     
-    # Standardize
+    elif dataset_type == "Image Segmentation":
+        # Generate synthetic image
+        if image_size is None:
+            size = (60, 60)
+        else:
+            size = image_size
+        
+        image = generate_synthetic_image(size=size, n_regions=n_centers, noise_level=noise_level)
+        
+        # Extract features from image
+        X = extract_features_from_image(image, feature_type)
+        
+        # Create ground truth labels based on pixel regions
+        # For demo purposes, we'll create simple region-based labels
+        h, w = image.shape
+        y_true = []
+        for i in range(h):
+            for j in range(w):
+                # Simple quadrant-based labeling for ground truth
+                if n_centers == 4:
+                    if i < h//2 and j < w//2:
+                        y_true.append(0)  # Top-left
+                    elif i < h//2 and j >= w//2:
+                        y_true.append(1)  # Top-right
+                    elif i >= h//2 and j < w//2:
+                        y_true.append(2)  # Bottom-left
+                    else:
+                        y_true.append(3)  # Bottom-right
+                else:
+                    # For other region counts, use position-based labeling
+                    y_true.append((i // (h // n_centers)) * n_centers + (j // (w // n_centers)))
+        
+        y_true = np.array(y_true)
+        
+        # Don't standardize image features as they have specific meaning
+        # Return tuple with image for special visualization
+        return X, y_true.astype(int), image
+    
+    # Standardize (except for images)
     scaler = StandardScaler()
     X = scaler.fit_transform(X)
     
     return X, y_true.astype(int)
 
-def display_results(X, y_true, results, dataset_type, sample_fraction, col1, col2):
+def display_results(X, y_true, results, dataset_type, sample_fraction, col1, col2, original_image=None):
     """Display clustering results and comparisons"""
     
     with col1:
+        # Special handling for image segmentation
+        if dataset_type == "Image Segmentation" and original_image is not None:
+            st.subheader("🖼️ Original Image")
+            fig, ax = plt.subplots(figsize=(6, 6))
+            ax.imshow(original_image, cmap='gray')
+            ax.set_title("Synthetic Image for Segmentation")
+            ax.axis('off')
+            st.pyplot(fig)
+            plt.close(fig)
+        
         # 1. Data Distribution Plot (similar to experiment 1)
         st.subheader("🎯 Data Distribution")
         fig = create_data_distribution_plot(X, y_true, dataset_type, len(X))
