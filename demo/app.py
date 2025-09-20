@@ -617,127 +617,185 @@ def create_clustering_plot(X, y_true, results):
     return fig
 
 def create_data_distribution_plot(X, y_true, dataset_type, n_samples):
-    """Create a detailed data distribution plot similar to experiment 1"""
+    """Create data distribution plot exactly like experiment 1 (exp1_sams_gaussian.png)"""
     
-    # Debug: Print data ranges for troubleshooting
+    # Debug: Print data info
     print(f"Data shape: {X.shape}")
     print(f"X range: [{X[:, 0].min():.3f}, {X[:, 0].max():.3f}]")
     print(f"Y range: [{X[:, 1].min():.3f}, {X[:, 1].max():.3f}]")
     print(f"y_true unique values: {np.unique(y_true)}")
     
-    # Create DataFrame for better plotly handling
-    df = pd.DataFrame({
-        'Feature_1': X[:, 0],
-        'Feature_2': X[:, 1], 
-        'True_Cluster': y_true.astype(str)  # Convert to string for discrete colors
-    })
+    # Create the scatter plot using go.Scatter (more control than px.scatter)
+    fig = go.Figure()
     
-    # Use discrete colors for true clusters
-    fig = px.scatter(
-        df,
-        x='Feature_1', 
-        y='Feature_2', 
-        color='True_Cluster',
-        color_discrete_sequence=px.colors.qualitative.Set1,
-        title=f"{dataset_type} Dataset Distribution (n={n_samples:,} points)",
-        labels={'Feature_1': 'Feature 1', 'Feature_2': 'Feature 2', 'True_Cluster': 'True Cluster'}
-    )
+    # Get unique clusters and assign colors using viridis-like colors
+    unique_clusters = np.unique(y_true)
+    n_clusters = len(unique_clusters)
     
-    fig.update_traces(
-        marker=dict(size=6, opacity=0.8, line=dict(width=0.5, color='white'))
-    )
+    # Use viridis colors to match experiment 1
+    import plotly.colors as pc
+    viridis_colors = pc.sample_colorscale('viridis', [i/(n_clusters-1) for i in range(n_clusters)])
     
-    # Explicitly set axis ranges with some padding
-    x_margin = (X[:, 0].max() - X[:, 0].min()) * 0.1
-    y_margin = (X[:, 1].max() - X[:, 1].min()) * 0.1
+    # Plot each cluster separately for proper color assignment
+    for i, cluster_id in enumerate(unique_clusters):
+        mask = y_true == cluster_id
+        cluster_points = X[mask]
+        
+        fig.add_trace(go.Scatter(
+            x=cluster_points[:, 0],
+            y=cluster_points[:, 1],
+            mode='markers',
+            marker=dict(
+                color=viridis_colors[i],
+                size=8,
+                opacity=0.8,
+                line=dict(width=0.5, color='white')
+            ),
+            name=f'Cluster {cluster_id}',
+            showlegend=True,
+            hovertemplate=f"<b>True Cluster {cluster_id}</b><br>" +
+                         "Feature 1: %{x:.3f}<br>" +
+                         "Feature 2: %{y:.3f}<extra></extra>"
+        ))
     
+    # Update layout to match experiment 1 style
     fig.update_layout(
+        title=f"Data Distribution for '{dataset_type}' (n={n_samples:,} points, True Clusters={n_clusters})",
+        xaxis_title="Feature 1",
+        yaxis_title="Feature 2",
         plot_bgcolor='white',
-        height=500,
+        height=600,
+        width=800,
         font=dict(size=12),
-        xaxis=dict(
-            range=[X[:, 0].min() - x_margin, X[:, 0].max() + x_margin],
-            title="Feature 1",
-            showgrid=True,
-            gridcolor='lightgray'
-        ),
-        yaxis=dict(
-            range=[X[:, 1].min() - y_margin, X[:, 1].max() + y_margin],
-            title="Feature 2", 
-            showgrid=True,
-            gridcolor='lightgray'
+        title_x=0.5,
+        showlegend=True,
+        legend=dict(
+            yanchor="top",
+            y=0.99,
+            xanchor="left",
+            x=1.01
         )
+    )
+    
+    # Add grid like in experiment 1
+    fig.update_xaxes(
+        showgrid=True,
+        gridwidth=1,
+        gridcolor='lightgray',
+        zeroline=True,
+        zerolinewidth=1,
+        zerolinecolor='gray'
+    )
+    fig.update_yaxes(
+        showgrid=True,
+        gridwidth=1,
+        gridcolor='lightgray',
+        zeroline=True,
+        zerolinewidth=1,
+        zerolinecolor='gray'
     )
     
     return fig
 
 def create_individual_clustering_plot(X, labels, method_name, result_info):
-    """Create individual clustering result plot similar to experiment 1"""
+    """Create clustering result plot exactly like experiment 1 style"""
     
     # Get metrics for title
     n_clusters = result_info['n_clusters']
     runtime = result_info['time']
     bandwidth = result_info['bandwidth']
     
-    # Create DataFrame for better plotly handling
-    df = pd.DataFrame({
-        'Feature_1': X[:, 0],
-        'Feature_2': X[:, 1], 
-        'Cluster': labels.astype(str)  # Convert to string for discrete colors
-    })
+    # Create the scatter plot using go.Scatter for better control
+    fig = go.Figure()
     
-    # Use discrete colors for clusters
-    fig = px.scatter(
-        df,
-        x='Feature_1', 
-        y='Feature_2', 
-        color='Cluster',
-        color_discrete_sequence=px.colors.qualitative.Set1,
-        title=f"{method_name} - Clusters: {n_clusters}, Time: {runtime:.3f}s",
-        labels={'Feature_1': 'Feature 1', 'Feature_2': 'Feature 2', 'Cluster': 'Cluster'}
-    )
+    # Get unique clusters and assign viridis colors
+    unique_clusters = np.unique(labels)
+    n_found_clusters = len(unique_clusters)
     
-    fig.update_traces(
-        marker=dict(size=6, opacity=0.8, line=dict(width=0.5, color='white'))
-    )
+    # Use viridis colors to match experiment 1
+    import plotly.colors as pc
+    if n_found_clusters > 1:
+        viridis_colors = pc.sample_colorscale('viridis', [i/(n_found_clusters-1) for i in range(n_found_clusters)])
+    else:
+        viridis_colors = ['#440154']  # Single viridis color
     
-    # Add cluster centers if available
+    # Plot each cluster separately for proper color assignment
+    for i, cluster_id in enumerate(unique_clusters):
+        mask = labels == cluster_id
+        cluster_points = X[mask]
+        
+        fig.add_trace(go.Scatter(
+            x=cluster_points[:, 0],
+            y=cluster_points[:, 1],
+            mode='markers',
+            marker=dict(
+                color=viridis_colors[i],
+                size=8,
+                opacity=0.8,
+                line=dict(width=0.5, color='white')
+            ),
+            name=f'Cluster {cluster_id}',
+            showlegend=True,
+            hovertemplate=f"<b>{method_name} Cluster {cluster_id}</b><br>" +
+                         "Feature 1: %{x:.3f}<br>" +
+                         "Feature 2: %{y:.3f}<extra></extra>"
+        ))
+    
+    # Add cluster centers as red X markers (like experiment 1)
     if result_info.get('centers') is not None and len(result_info['centers']) > 0:
         centers = result_info['centers']
-        fig.add_scatter(
+        fig.add_trace(go.Scatter(
             x=centers[:, 0],
             y=centers[:, 1],
             mode='markers',
             marker=dict(
                 color='red',
                 symbol='x',
-                size=12,
+                size=15,
                 line=dict(width=3, color='white')
             ),
-            name="Centers",
-            showlegend=True
-        )
+            name="Cluster Centers",
+            showlegend=True,
+            hovertemplate="<b>Cluster Center</b><br>" +
+                         "X: %{x:.3f}<br>" +
+                         "Y: %{y:.3f}<extra></extra>"
+        ))
     
-    # Explicitly set axis ranges with some padding
-    x_margin = (X[:, 0].max() - X[:, 0].min()) * 0.1
-    y_margin = (X[:, 1].max() - X[:, 1].min()) * 0.1
-    
+    # Update layout to match experiment 1 style exactly  
     fig.update_layout(
+        title=f"{method_name} Clustering Result<br>(n={len(X):,}, Clusters={n_clusters}, Time={runtime:.3f}s, BW={bandwidth:.4f})",
+        xaxis_title="Feature 1",
+        yaxis_title="Feature 2",
         plot_bgcolor='white',
-        height=500,
+        height=600,
+        width=800,
         font=dict(size=12),
-        xaxis=dict(
-            range=[X[:, 0].min() - x_margin, X[:, 0].max() + x_margin],
-            title="Feature 1",
-            showgrid=True,
-            gridcolor='lightgray'
-        ),
-        yaxis=dict(
-            range=[X[:, 1].min() - y_margin, X[:, 1].max() + y_margin],
-            title="Feature 2",
-            showgrid=True,
-            gridcolor='lightgray'
+        title_x=0.5,
+        showlegend=True,
+        legend=dict(
+            yanchor="top",
+            y=0.99,
+            xanchor="left",
+            x=1.01
         )
+    )
+    
+    # Add grid like in experiment 1
+    fig.update_xaxes(
+        showgrid=True,
+        gridwidth=1,
+        gridcolor='lightgray',
+        zeroline=True,
+        zerolinewidth=1,
+        zerolinecolor='gray'
+    )
+    fig.update_yaxes(
+        showgrid=True,
+        gridwidth=1,
+        gridcolor='lightgray',
+        zeroline=True,
+        zerolinewidth=1,
+        zerolinecolor='gray'
     )
     
     return fig
