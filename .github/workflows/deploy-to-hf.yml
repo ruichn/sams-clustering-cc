@@ -9,11 +9,13 @@ on:
       - 'requirements.txt' 
       - 'README.md'
       - 'LICENSE'
-    # Explicitly exclude plots directory
+    # Explicitly exclude directories that shouldn't be deployed
     paths-ignore:
       - 'plots/**'
       - 'src/**'
       - 'docs/**'
+      - 'sams_env/**'
+      - '.github/**'
 
 jobs:
   deploy:
