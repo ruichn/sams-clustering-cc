@@ -396,16 +396,29 @@ def display_results(X, y_true, results, dataset_type, col1, col2):
     """Display clustering results and comparisons"""
     
     with col1:
-        # Create visualization
-        fig = create_clustering_plot(X, y_true, results)
-        st.plotly_chart(fig, use_container_width=True)
+        # 1. Data Distribution Plot (similar to experiment 1)
+        st.subheader("🎯 Data Distribution")
+        data_dist_fig = create_data_distribution_plot(X, y_true, dataset_type, len(X))
+        st.plotly_chart(data_dist_fig, use_container_width=True)
         
-        # Performance metrics
+        # 2. Individual clustering results
+        st.subheader("🔍 Clustering Results")
+        for method_name, result in results.items():
+            st.markdown(f"**{method_name}:**")
+            individual_fig = create_individual_clustering_plot(X, result['labels'], method_name, result)
+            st.plotly_chart(individual_fig, use_container_width=True)
+        
+        # 3. Side-by-side comparison
+        st.subheader("⚖️ Side-by-Side Comparison")
+        comparison_fig = create_clustering_plot(X, y_true, results)
+        st.plotly_chart(comparison_fig, use_container_width=True)
+        
+        # 4. Performance metrics
         st.subheader("📊 Performance Metrics")
         metrics_df = calculate_metrics(X, y_true, results)
         st.dataframe(metrics_df, use_container_width=True)
         
-        # Runtime comparison if multiple methods
+        # 5. Runtime comparison if multiple methods
         if len(results) > 1:
             st.subheader("⚡ Runtime Comparison")
             runtime_fig = create_runtime_plot(results)
@@ -473,71 +486,293 @@ def display_results(X, y_true, results, dataset_type, col1, col2):
                 pass
 
 def create_clustering_plot(X, y_true, results):
-    """Create interactive clustering visualization"""
+    """Create interactive clustering visualization similar to experiment 1 results"""
     
     n_methods = len(results) + 1  # +1 for true clusters
     n_cols = min(3, n_methods)
     n_rows = (n_methods + n_cols - 1) // n_cols
     
-    subplot_titles = ["True Clusters"] + list(results.keys())
+    # Create enhanced subplot titles with statistics
+    subplot_titles = [f"True Clusters (n={len(X):,})"]
+    for method_name, result in results.items():
+        n_clusters = result['n_clusters']
+        runtime = result['time']
+        subplot_titles.append(f"{method_name}<br>Clusters: {n_clusters}, Time: {runtime:.3f}s")
+    
     fig = make_subplots(
         rows=n_rows, 
         cols=n_cols,
         subplot_titles=subplot_titles,
-        horizontal_spacing=0.1,
-        vertical_spacing=0.15
+        horizontal_spacing=0.12,
+        vertical_spacing=0.2
     )
     
-    # True clusters
+    # Enhanced styling for True clusters
     row, col = 1, 1
     fig.add_trace(
         go.Scatter(
             x=X[:, 0], 
             y=X[:, 1],
             mode='markers',
-            marker=dict(color=y_true, colorscale='viridis', size=4, opacity=0.7),
-            name="True",
-            showlegend=False
+            marker=dict(
+                color=y_true, 
+                colorscale='viridis', 
+                size=6, 
+                opacity=0.8,
+                line=dict(width=0.5, color='white')
+            ),
+            name="True Clusters",
+            showlegend=False,
+            hovertemplate="<b>True Cluster</b><br>" +
+                         "Feature 1: %{x:.3f}<br>" +
+                         "Feature 2: %{y:.3f}<br>" +
+                         "Cluster: %{marker.color}<extra></extra>"
         ),
         row=row, col=col
     )
     
-    # Method results
+    # Method results with enhanced styling
     for i, (method_name, result) in enumerate(results.items()):
         row = ((i + 1) // n_cols) + 1
         col = ((i + 1) % n_cols) + 1
         
+        # Main scatter plot
         fig.add_trace(
             go.Scatter(
                 x=X[:, 0],
                 y=X[:, 1], 
                 mode='markers',
-                marker=dict(color=result['labels'], colorscale='viridis', size=4, opacity=0.7),
+                marker=dict(
+                    color=result['labels'], 
+                    colorscale='viridis', 
+                    size=6, 
+                    opacity=0.8,
+                    line=dict(width=0.5, color='white')
+                ),
                 name=method_name,
-                showlegend=False
+                showlegend=False,
+                hovertemplate=f"<b>{method_name}</b><br>" +
+                             "Feature 1: %{x:.3f}<br>" +
+                             "Feature 2: %{y:.3f}<br>" +
+                             "Cluster: %{marker.color}<extra></extra>"
             ),
             row=row, col=col
         )
         
-        # Add cluster centers if available
+        # Add cluster centers with enhanced styling
         if result['centers'] is not None and len(result['centers']) > 0:
             fig.add_trace(
                 go.Scatter(
                     x=result['centers'][:, 0],
                     y=result['centers'][:, 1],
                     mode='markers',
-                    marker=dict(color='red', symbol='x', size=10, line=dict(width=2, color='white')),
+                    marker=dict(
+                        color='red', 
+                        symbol='x', 
+                        size=12, 
+                        line=dict(width=3, color='white')
+                    ),
                     name=f"{method_name} Centers",
-                    showlegend=False
+                    showlegend=False,
+                    hovertemplate=f"<b>{method_name} Center</b><br>" +
+                                 "X: %{x:.3f}<br>" +
+                                 "Y: %{y:.3f}<extra></extra>"
                 ),
                 row=row, col=col
             )
     
+    # Update layout with experiment 1 styling
     fig.update_layout(
-        height=300 * n_rows,
-        title_text="Clustering Results Comparison",
+        height=400 * n_rows,
+        title_text="<b>Clustering Results: Data Distribution and Cluster Assignments</b>",
         title_x=0.5,
-        font=dict(size=12)
+        title_font=dict(size=16),
+        font=dict(size=11),
+        showlegend=False,
+        plot_bgcolor='white'
+    )
+    
+    # Update axes styling to match experiment plots
+    for i in range(1, n_rows + 1):
+        for j in range(1, n_cols + 1):
+            fig.update_xaxes(
+                title_text="Feature 1",
+                gridcolor='lightgray',
+                gridwidth=0.5,
+                zeroline=True,
+                zerolinecolor='gray',
+                zerolinewidth=1,
+                row=i, col=j
+            )
+            fig.update_yaxes(
+                title_text="Feature 2",
+                gridcolor='lightgray',
+                gridwidth=0.5,
+                zeroline=True,
+                zerolinecolor='gray',
+                zerolinewidth=1,
+                row=i, col=j
+            )
+    
+    return fig
+
+def create_data_distribution_plot(X, y_true, dataset_type, n_samples):
+    """Create a detailed data distribution plot similar to experiment 1"""
+    
+    fig = go.Figure()
+    
+    # Get unique clusters and create color mapping
+    unique_clusters = np.unique(y_true)
+    n_clusters = len(unique_clusters)
+    
+    # Create scatter plot with enhanced styling
+    fig.add_trace(
+        go.Scatter(
+            x=X[:, 0],
+            y=X[:, 1],
+            mode='markers',
+            marker=dict(
+                color=y_true,
+                colorscale='viridis',
+                size=8,
+                opacity=0.8,
+                line=dict(width=0.5, color='white'),
+                colorbar=dict(
+                    title="Cluster ID",
+                    titleside="right",
+                    tickmode="linear",
+                    tick0=0,
+                    dtick=1
+                )
+            ),
+            name="Data Points",
+            hovertemplate="<b>Data Point</b><br>" +
+                         "Feature 1: %{x:.3f}<br>" +
+                         "Feature 2: %{y:.3f}<br>" +
+                         "True Cluster: %{marker.color}<extra></extra>"
+        )
+    )
+    
+    # Update layout with experiment-style formatting
+    fig.update_layout(
+        title=dict(
+            text=f"<b>{dataset_type} Dataset Distribution</b><br>" +
+                 f"<span style='font-size:12px'>n={n_samples:,} points, {n_clusters} true clusters</span>",
+            x=0.5,
+            font=dict(size=16)
+        ),
+        xaxis=dict(
+            title="Feature 1",
+            gridcolor='lightgray',
+            gridwidth=0.5,
+            zeroline=True,
+            zerolinecolor='gray',
+            zerolinewidth=1
+        ),
+        yaxis=dict(
+            title="Feature 2",
+            gridcolor='lightgray',
+            gridwidth=0.5,
+            zeroline=True,
+            zerolinecolor='gray',
+            zerolinewidth=1
+        ),
+        plot_bgcolor='white',
+        width=600,
+        height=500,
+        showlegend=False
+    )
+    
+    return fig
+
+def create_individual_clustering_plot(X, labels, method_name, result_info):
+    """Create individual clustering result plot similar to experiment 1"""
+    
+    fig = go.Figure()
+    
+    # Create scatter plot
+    fig.add_trace(
+        go.Scatter(
+            x=X[:, 0],
+            y=X[:, 1],
+            mode='markers',
+            marker=dict(
+                color=labels,
+                colorscale='viridis',
+                size=8,
+                opacity=0.8,
+                line=dict(width=0.5, color='white'),
+                colorbar=dict(
+                    title="Cluster ID",
+                    titleside="right",
+                    tickmode="linear",
+                    tick0=0,
+                    dtick=1
+                )
+            ),
+            name="Clustered Points",
+            hovertemplate=f"<b>{method_name}</b><br>" +
+                         "Feature 1: %{x:.3f}<br>" +
+                         "Feature 2: %{y:.3f}<br>" +
+                         "Assigned Cluster: %{marker.color}<extra></extra>"
+        )
+    )
+    
+    # Add cluster centers if available
+    if result_info.get('centers') is not None and len(result_info['centers']) > 0:
+        centers = result_info['centers']
+        fig.add_trace(
+            go.Scatter(
+                x=centers[:, 0],
+                y=centers[:, 1],
+                mode='markers',
+                marker=dict(
+                    color='red',
+                    symbol='x',
+                    size=15,
+                    line=dict(width=4, color='white')
+                ),
+                name="Cluster Centers",
+                hovertemplate="<b>Cluster Center</b><br>" +
+                             "X: %{x:.3f}<br>" +
+                             "Y: %{y:.3f}<extra></extra>"
+            )
+        )
+    
+    # Get metrics for title
+    n_clusters = result_info['n_clusters']
+    runtime = result_info['time']
+    bandwidth = result_info['bandwidth']
+    
+    # Update layout
+    fig.update_layout(
+        title=dict(
+            text=f"<b>{method_name} Clustering Result</b><br>" +
+                 f"<span style='font-size:12px'>Clusters: {n_clusters}, " +
+                 f"Runtime: {runtime:.3f}s, Bandwidth: {bandwidth:.4f}</span>",
+            x=0.5,
+            font=dict(size=16)
+        ),
+        xaxis=dict(
+            title="Feature 1",
+            gridcolor='lightgray',
+            gridwidth=0.5,
+            zeroline=True,
+            zerolinecolor='gray',
+            zerolinewidth=1
+        ),
+        yaxis=dict(
+            title="Feature 2",
+            gridcolor='lightgray',
+            gridwidth=0.5,
+            zeroline=True,
+            zerolinecolor='gray',
+            zerolinewidth=1
+        ),
+        plot_bgcolor='white',
+        width=600,
+        height=500,
+        showlegend=False
     )
     
     return fig
