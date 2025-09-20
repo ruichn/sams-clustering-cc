@@ -1,3 +1,15 @@
+---
+title: SAMS Clustering Demo
+emoji: 🔬
+colorFrom: blue
+colorTo: green
+sdk: streamlit
+sdk_version: 1.28.1
+app_file: app.py
+pinned: false
+license: mit
+---
+
 # 🔬 SAMS Clustering Interactive Demo
 
 An interactive web application for exploring the **Stochastic Approximation Mean-Shift (SAMS)** clustering algorithm from:
