@@ -52,6 +52,13 @@ wheels/
 *.bak
 *~
 
+# HuggingFace temporary clones
+hf-*/
+*-deploy/
+*-fix/
+*-update/
+*-debug/
+
 # Test coverage
 htmlcov/
 .coverage
