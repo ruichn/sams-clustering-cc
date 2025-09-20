@@ -30,9 +30,9 @@ This repository contains a **fully validated implementation** of the SAMS algori
 │       └── image_segmentation.py
 ├── app.py                          # Interactive Streamlit demo (auto-deployed to HF)
 ├── requirements.txt                # Dependencies (includes demo and core)
-├── docs/                           # Documentation
-├── plots/                          # Generated visualizations
-├── tests/                          # Unit tests
+├── docs/                           # Documentation (GitHub only)
+├── plots/                          # Generated visualizations (GitHub only)
+├── tests/                          # Unit tests (GitHub only)
 └── README.md                       # This file
 ```
 
