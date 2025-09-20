@@ -838,34 +838,36 @@ def calculate_metrics(X, y_true, results):
     
     return pd.DataFrame(metrics_data)
 
-# Sidebar information
-with st.sidebar:
-    st.markdown("---")
-    st.subheader("ℹ️ About SAMS")
-    st.markdown("""
-    **Key Algorithm Features:**
-    - **O(n) complexity** per iteration
-    - **Stochastic sampling** for speed
-    - **Adaptive parameters** 
-    - **Vectorized computation**
-    
-    **Validated Performance:**
-    - **74-106x speedup** over mean-shift
-    - **91-99% quality retention**
-    - **Scales to large datasets**
-    """)
-    
-    st.markdown("---")
-    st.subheader("📚 Reference")
-    st.markdown("""
-    Hyrien, O., & Baran, R. H. (2017). 
-    *Fast Nonparametric Density-Based 
-    Clustering of Large Data Sets Using a 
-    Stochastic Approximation Mean-Shift Algorithm.*
-    """)
-    
-    st.markdown("---")
-    st.markdown("*Demo built with Streamlit & Plotly*")
+def add_sidebar_info():
+    """Add sidebar information"""
+    with st.sidebar:
+        st.markdown("---")
+        st.subheader("ℹ️ About SAMS")
+        st.markdown("""
+        **Key Algorithm Features:**
+        - **O(n) complexity** per iteration
+        - **Stochastic sampling** for speed
+        - **Adaptive parameters** 
+        - **Vectorized computation**
+        
+        **Validated Performance:**
+        - **74-106x speedup** over mean-shift
+        - **91-99% quality retention**
+        - **Scales to large datasets**
+        """)
+        
+        st.markdown("---")
+        st.subheader("📚 Reference")
+        st.markdown("""
+        Hyrien, O., & Baran, R. H. (2017). 
+        *Fast Nonparametric Density-Based 
+        Clustering of Large Data Sets Using a 
+        Stochastic Approximation Mean-Shift Algorithm.*
+        """)
+        
+        st.markdown("---")
+        st.markdown("*Demo built with Streamlit & Plotly*")
 
 if __name__ == "__main__":
     main()
+    add_sidebar_info()
