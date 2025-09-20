@@ -10,8 +10,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
-import plotly.graph_objects as go
-import plotly.colors as pc
+# Removed Plotly imports - using matplotlib only
 from scipy.spatial.distance import cdist
 # Removed dependency on external experiment module for Hugging Face deployment
 
@@ -412,10 +411,11 @@ def display_results(X, y_true, results, dataset_type, sample_fraction, col1, col
             if method_name == "SAMS":
                 # Use the plot_clustering_result style for SAMS
                 fig = plot_clustering_result_streamlit(X, result['labels'], dataset_type, len(X), sample_fraction)
+                st.pyplot(fig)
             else:
-                # Use original plotting for other methods
+                # Use original plotting for other methods (now returns matplotlib figure)
                 fig = create_individual_clustering_plot(X, result['labels'], method_name, result)
-            st.pyplot(fig)
+                st.pyplot(fig)
         
         # 3. Side-by-side comparison
         st.subheader("⚖️ Side-by-Side Comparison")
@@ -567,109 +567,42 @@ def create_data_distribution_plot(X, y_true, dataset_type, n_samples):
     return plot_clustering_result_streamlit(X, y_true, dataset_type, n_samples)
 
 def create_individual_clustering_plot(X, labels, method_name, result_info):
-    """Create clustering result plot exactly like experiment 1 style"""
+    """Create clustering result plot using matplotlib"""
     
     # Get metrics for title
     n_clusters = result_info['n_clusters']
     runtime = result_info['time']
     bandwidth = result_info['bandwidth']
     
-    # Create the scatter plot using go.Scatter for better control
-    fig = go.Figure()
+    # Create matplotlib figure
+    fig, ax = plt.subplots(figsize=(8, 6))
     
-    # Get unique clusters and assign viridis colors
-    unique_clusters = np.unique(labels)
-    n_found_clusters = len(unique_clusters)
+    # Plot data points colored by cluster assignment
+    scatter = ax.scatter(X[:, 0], X[:, 1], c=labels, cmap='viridis', s=10, alpha=0.8)
     
-    # Use viridis colors to match experiment 1
-    if n_found_clusters > 1:
-        viridis_colors = pc.sample_colorscale('viridis', [i/(n_found_clusters-1) for i in range(n_found_clusters)])
-    else:
-        viridis_colors = ['#440154']  # Single viridis color
-    
-    # Plot each cluster separately for proper color assignment
-    for i, cluster_id in enumerate(unique_clusters):
-        mask = labels == cluster_id
-        cluster_points = X[mask]
-        
-        fig.add_trace(go.Scatter(
-            x=cluster_points[:, 0],
-            y=cluster_points[:, 1],
-            mode='markers',
-            marker=dict(
-                color=viridis_colors[i],
-                size=8,
-                opacity=0.8,
-                line=dict(width=0.5, color='white')
-            ),
-            name=f'Cluster {cluster_id}',
-            showlegend=True,
-            hovertemplate=f"<b>{method_name} Cluster {cluster_id}</b><br>" +
-                         "Feature 1: %{x:.3f}<br>" +
-                         "Feature 2: %{y:.3f}<extra></extra>"
-        ))
-    
-    # Add cluster centers as red X markers (like experiment 1)
+    # Add cluster centers as red X markers
     if result_info.get('centers') is not None and len(result_info['centers']) > 0:
         centers = result_info['centers']
-        fig.add_trace(go.Scatter(
-            x=centers[:, 0],
-            y=centers[:, 1],
-            mode='markers',
-            marker=dict(
-                color='red',
-                symbol='x',
-                size=15,
-                line=dict(width=3, color='white')
-            ),
-            name="Cluster Centers",
-            showlegend=True,
-            hovertemplate="<b>Cluster Center</b><br>" +
-                         "X: %{x:.3f}<br>" +
-                         "Y: %{y:.3f}<extra></extra>"
-        ))
+        ax.scatter(centers[:, 0], centers[:, 1], c='red', marker='x', s=100, linewidths=3, label='Centers')
     
-    # Update layout to match experiment 1 style exactly  
-    fig.update_layout(
-        title=f"{method_name} Clustering Result<br>(n={len(X):,}, Clusters={n_clusters}, Time={runtime:.3f}s, BW={bandwidth:.4f})",
-        xaxis_title="Feature 1",
-        yaxis_title="Feature 2",
-        plot_bgcolor='white',
-        height=600,
-        width=800,
-        font=dict(size=12),
-        title_x=0.5,
-        showlegend=True,
-        legend=dict(
-            yanchor="top",
-            y=0.99,
-            xanchor="left",
-            x=1.01
-        )
-    )
+    # Set title and labels
+    ax.set_title(f"{method_name} Clustering Result\n(n={len(X):,}, Clusters={n_clusters}, Time={runtime:.3f}s, BW={bandwidth:.4f})")
+    ax.set_xlabel("Feature 1")
+    ax.set_ylabel("Feature 2")
+    ax.grid(True, alpha=0.3)
     
-    # Add grid like in experiment 1
-    fig.update_xaxes(
-        showgrid=True,
-        gridwidth=1,
-        gridcolor='lightgray',
-        zeroline=True,
-        zerolinewidth=1,
-        zerolinecolor='gray'
-    )
-    fig.update_yaxes(
-        showgrid=True,
-        gridwidth=1,
-        gridcolor='lightgray',
-        zeroline=True,
-        zerolinewidth=1,
-        zerolinecolor='gray'
-    )
+    # Add colorbar
+    plt.colorbar(scatter, ax=ax, label="Cluster ID")
     
+    # Add legend if centers are present
+    if result_info.get('centers') is not None and len(result_info['centers']) > 0:
+        ax.legend()
+    
+    plt.tight_layout()
     return fig
 
 def create_runtime_plot(results):
-    """Create runtime comparison plot"""
+    """Create runtime comparison plot using matplotlib"""
     
     methods = list(results.keys())
     times = [results[method]['time'] for method in methods]
@@ -677,25 +610,25 @@ def create_runtime_plot(results):
     # Color SAMS differently
     colors = ['#ff6b6b' if 'SAMS' in method else '#4ecdc4' for method in methods]
     
-    fig = go.Figure(data=[
-        go.Bar(
-            x=methods,
-            y=times,
-            text=[f"{t:.3f}s" for t in times],
-            textposition='auto',
-            marker_color=colors,
-            opacity=0.8
-        )
-    ])
+    # Create matplotlib figure
+    fig, ax = plt.subplots(figsize=(8, 4))
     
-    fig.update_layout(
-        title="Runtime Comparison",
-        xaxis_title="Method",
-        yaxis_title="Time (seconds)",
-        height=300,
-        font=dict(size=12)
-    )
+    # Create bar plot
+    bars = ax.bar(methods, times, color=colors, alpha=0.8)
     
+    # Add value labels on bars
+    for bar, time in zip(bars, times):
+        height = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width()/2., height,
+                f'{time:.3f}s', ha='center', va='bottom')
+    
+    # Set labels and title
+    ax.set_title("Runtime Comparison")
+    ax.set_xlabel("Method")
+    ax.set_ylabel("Time (seconds)")
+    ax.grid(True, alpha=0.3, axis='y')
+    
+    plt.tight_layout()
     return fig
 
 def calculate_metrics(X, y_true, results):
