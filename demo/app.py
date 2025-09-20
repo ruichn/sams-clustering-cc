@@ -619,67 +619,24 @@ def create_clustering_plot(X, y_true, results):
 def create_data_distribution_plot(X, y_true, dataset_type, n_samples):
     """Create a detailed data distribution plot similar to experiment 1"""
     
-    fig = go.Figure()
-    
-    # Get unique clusters and create color mapping
-    unique_clusters = np.unique(y_true)
-    n_clusters = len(unique_clusters)
-    
-    # Create scatter plot with enhanced styling
-    fig.add_trace(
-        go.Scatter(
-            x=X[:, 0],
-            y=X[:, 1],
-            mode='markers',
-            marker=dict(
-                color=y_true,
-                colorscale='viridis',
-                size=8,
-                opacity=0.8,
-                line=dict(width=0.5, color='white'),
-                colorbar=dict(
-                    title="Cluster ID",
-                    tickmode="linear",
-                    tick0=0,
-                    dtick=1
-                )
-            ),
-            name="Data Points",
-            hovertemplate="<b>Data Point</b><br>" +
-                         "Feature 1: %{x:.3f}<br>" +
-                         "Feature 2: %{y:.3f}<br>" +
-                         "True Cluster: %{marker.color}<extra></extra>"
-        )
+    # Simple basic scatter plot that should work
+    fig = px.scatter(
+        x=X[:, 0], 
+        y=X[:, 1], 
+        color=y_true,
+        color_continuous_scale='viridis',
+        title=f"{dataset_type} Dataset Distribution (n={n_samples:,} points)",
+        labels={'x': 'Feature 1', 'y': 'Feature 2', 'color': 'True Cluster'}
     )
     
-    # Update layout with experiment-style formatting
+    fig.update_traces(
+        marker=dict(size=6, opacity=0.8, line=dict(width=0.5, color='white'))
+    )
+    
     fig.update_layout(
-        title=dict(
-            text=f"<b>{dataset_type} Dataset Distribution</b><br>" +
-                 f"<span style='font-size:12px'>n={n_samples:,} points, {n_clusters} true clusters</span>",
-            x=0.5,
-            font=dict(size=16)
-        ),
-        xaxis=dict(
-            title="Feature 1",
-            gridcolor='lightgray',
-            gridwidth=0.5,
-            zeroline=True,
-            zerolinecolor='gray',
-            zerolinewidth=1
-        ),
-        yaxis=dict(
-            title="Feature 2",
-            gridcolor='lightgray',
-            gridwidth=0.5,
-            zeroline=True,
-            zerolinecolor='gray',
-            zerolinewidth=1
-        ),
         plot_bgcolor='white',
-        width=600,
         height=500,
-        showlegend=False
+        font=dict(size=12)
     )
     
     return fig
@@ -687,90 +644,46 @@ def create_data_distribution_plot(X, y_true, dataset_type, n_samples):
 def create_individual_clustering_plot(X, labels, method_name, result_info):
     """Create individual clustering result plot similar to experiment 1"""
     
-    fig = go.Figure()
-    
-    # Create scatter plot
-    fig.add_trace(
-        go.Scatter(
-            x=X[:, 0],
-            y=X[:, 1],
-            mode='markers',
-            marker=dict(
-                color=labels,
-                colorscale='viridis',
-                size=8,
-                opacity=0.8,
-                line=dict(width=0.5, color='white'),
-                colorbar=dict(
-                    title="Cluster ID",
-                    tickmode="linear",
-                    tick0=0,
-                    dtick=1
-                )
-            ),
-            name="Clustered Points",
-            hovertemplate=f"<b>{method_name}</b><br>" +
-                         "Feature 1: %{x:.3f}<br>" +
-                         "Feature 2: %{y:.3f}<br>" +
-                         "Assigned Cluster: %{marker.color}<extra></extra>"
-        )
-    )
-    
-    # Add cluster centers if available
-    if result_info.get('centers') is not None and len(result_info['centers']) > 0:
-        centers = result_info['centers']
-        fig.add_trace(
-            go.Scatter(
-                x=centers[:, 0],
-                y=centers[:, 1],
-                mode='markers',
-                marker=dict(
-                    color='red',
-                    symbol='x',
-                    size=15,
-                    line=dict(width=4, color='white')
-                ),
-                name="Cluster Centers",
-                hovertemplate="<b>Cluster Center</b><br>" +
-                             "X: %{x:.3f}<br>" +
-                             "Y: %{y:.3f}<extra></extra>"
-            )
-        )
-    
     # Get metrics for title
     n_clusters = result_info['n_clusters']
     runtime = result_info['time']
     bandwidth = result_info['bandwidth']
     
-    # Update layout
+    # Create basic scatter plot
+    fig = px.scatter(
+        x=X[:, 0], 
+        y=X[:, 1], 
+        color=labels,
+        color_continuous_scale='viridis',
+        title=f"{method_name} - Clusters: {n_clusters}, Time: {runtime:.3f}s",
+        labels={'x': 'Feature 1', 'y': 'Feature 2', 'color': 'Cluster'}
+    )
+    
+    fig.update_traces(
+        marker=dict(size=6, opacity=0.8, line=dict(width=0.5, color='white'))
+    )
+    
+    # Add cluster centers if available
+    if result_info.get('centers') is not None and len(result_info['centers']) > 0:
+        centers = result_info['centers']
+        fig.add_scatter(
+            x=centers[:, 0],
+            y=centers[:, 1],
+            mode='markers',
+            marker=dict(
+                color='red',
+                symbol='x',
+                size=12,
+                line=dict(width=3, color='white')
+            ),
+            name="Centers",
+            showlegend=True
+        )
+    
     fig.update_layout(
-        title=dict(
-            text=f"<b>{method_name} Clustering Result</b><br>" +
-                 f"<span style='font-size:12px'>Clusters: {n_clusters}, " +
-                 f"Runtime: {runtime:.3f}s, Bandwidth: {bandwidth:.4f}</span>",
-            x=0.5,
-            font=dict(size=16)
-        ),
-        xaxis=dict(
-            title="Feature 1",
-            gridcolor='lightgray',
-            gridwidth=0.5,
-            zeroline=True,
-            zerolinecolor='gray',
-            zerolinewidth=1
-        ),
-        yaxis=dict(
-            title="Feature 2",
-            gridcolor='lightgray',
-            gridwidth=0.5,
-            zeroline=True,
-            zerolinecolor='gray',
-            zerolinewidth=1
-        ),
         plot_bgcolor='white',
-        width=600,
         height=500,
-        showlegend=False
+        font=dict(size=12)
     )
     
     return fig
