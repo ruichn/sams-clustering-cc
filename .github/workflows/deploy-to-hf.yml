@@ -9,13 +9,6 @@ on:
       - 'requirements.txt' 
       - 'README.md'
       - 'LICENSE'
-    # Explicitly exclude directories that shouldn't be deployed
-    paths-ignore:
-      - 'plots/**'
-      - 'src/**'
-      - 'docs/**'
-      - 'sams_env/**'
-      - '.github/**'
 
 jobs:
   deploy:
@@ -76,8 +69,9 @@ jobs:
           ## 🚀 Features
           
           - Interactive parameter controls for SAMS algorithm
-          - Multiple dataset types (Gaussian blobs, circles, moons, mixed densities)
-          - Real-time clustering visualization using matplotlib
+          - Multiple dataset types (Gaussian blobs, circles, moons, mixed densities, 3D blobs, 3D spheres)
+          - 🆕 **3D clustering support** with interactive 3D visualizations
+          - Real-time clustering visualization using matplotlib (2D/3D)
           - Performance comparison with scikit-learn mean-shift
           - Experiment-style plotting with consistent styling
           
