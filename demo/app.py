@@ -6,10 +6,17 @@ from sklearn.datasets import make_blobs, make_circles, make_moons
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score, silhouette_score
 from sklearn.cluster import MeanShift, estimate_bandwidth
-import plotly.express as px
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+import plotly.colors as pc
 from scipy.spatial.distance import cdist
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src', 'experiments'))
+from experiment1_basic_performance import plot_clustering_result
 
 # Standalone SAMS implementation for demo
 class DemoSAMS:
@@ -333,7 +340,7 @@ def run_clustering_experiment(dataset_type, n_samples, n_centers, noise_level, c
                 st.warning(f"Scikit-Learn Mean-Shift failed: {str(e)}")
     
     # Display results
-    display_results(X, y_true, results, dataset_type, col1, col2)
+    display_results(X, y_true, results, dataset_type, sample_fraction, col1, col2)
 
 def generate_dataset(dataset_type, n_samples, n_centers, noise_level, cluster_std=None):
     """Generate synthetic datasets based on user parameters"""
@@ -392,26 +399,31 @@ def generate_dataset(dataset_type, n_samples, n_centers, noise_level, cluster_st
     
     return X, y_true.astype(int)
 
-def display_results(X, y_true, results, dataset_type, col1, col2):
+def display_results(X, y_true, results, dataset_type, sample_fraction, col1, col2):
     """Display clustering results and comparisons"""
     
     with col1:
         # 1. Data Distribution Plot (similar to experiment 1)
         st.subheader("🎯 Data Distribution")
-        data_dist_fig = create_data_distribution_plot(X, y_true, dataset_type, len(X))
-        st.plotly_chart(data_dist_fig, use_container_width=True)
+        fig = create_data_distribution_plot(X, y_true, dataset_type, len(X))
+        st.pyplot(fig)
         
         # 2. Individual clustering results
         st.subheader("🔍 Clustering Results")
         for method_name, result in results.items():
             st.markdown(f"**{method_name}:**")
-            individual_fig = create_individual_clustering_plot(X, result['labels'], method_name, result)
-            st.plotly_chart(individual_fig, use_container_width=True)
+            if method_name == "SAMS":
+                # Use the plot_clustering_result style for SAMS
+                fig = plot_clustering_result_streamlit(X, result['labels'], dataset_type, len(X), sample_fraction)
+            else:
+                # Use original plotting for other methods
+                fig = create_individual_clustering_plot(X, result['labels'], method_name, result)
+            st.pyplot(fig)
         
         # 3. Side-by-side comparison
         st.subheader("⚖️ Side-by-Side Comparison")
-        comparison_fig = create_clustering_plot(X, y_true, results)
-        st.plotly_chart(comparison_fig, use_container_width=True)
+        fig = create_clustering_plot(X, y_true, results)
+        st.pyplot(fig)
         
         # 4. Performance metrics
         st.subheader("📊 Performance Metrics")
@@ -421,8 +433,8 @@ def display_results(X, y_true, results, dataset_type, col1, col2):
         # 5. Runtime comparison if multiple methods
         if len(results) > 1:
             st.subheader("⚡ Runtime Comparison")
-            runtime_fig = create_runtime_plot(results)
-            st.plotly_chart(runtime_fig, use_container_width=True)
+            fig = create_runtime_plot(results)
+            st.pyplot(fig)
     
     with col2:
         st.subheader("📋 Experiment Summary")
@@ -486,216 +498,76 @@ def display_results(X, y_true, results, dataset_type, col1, col2):
                 pass
 
 def create_clustering_plot(X, y_true, results):
-    """Create interactive clustering visualization similar to experiment 1 results"""
+    """Create clustering visualization using matplotlib like experiment 1 results"""
     
     n_methods = len(results) + 1  # +1 for true clusters
     n_cols = min(3, n_methods)
     n_rows = (n_methods + n_cols - 1) // n_cols
     
-    # Create enhanced subplot titles with statistics
-    subplot_titles = [f"True Clusters (n={len(X):,})"]
+    fig = plt.figure(figsize=(12, 6 * n_rows))
+    gs = GridSpec(n_rows, n_cols, figure=fig, hspace=0.3, wspace=0.3)
+    
+    # Plot True clusters
+    ax = fig.add_subplot(gs[0, 0])
+    scatter = ax.scatter(X[:, 0], X[:, 1], c=y_true, cmap='viridis', s=10, alpha=0.8)
+    ax.set_title(f"True Clusters (n={len(X):,})")
+    ax.set_xlabel("Feature 1")
+    ax.set_ylabel("Feature 2")
+    ax.grid(True, alpha=0.3)
+    
+    # Plot method results
+    plot_idx = 1
     for method_name, result in results.items():
+        row = plot_idx // n_cols
+        col = plot_idx % n_cols
+        
+        ax = fig.add_subplot(gs[row, col])
+        scatter = ax.scatter(X[:, 0], X[:, 1], c=result['labels'], cmap='viridis', s=10, alpha=0.8)
+        
+        # Add cluster centers
+        if result['centers'] is not None and len(result['centers']) > 0:
+            ax.scatter(result['centers'][:, 0], result['centers'][:, 1], 
+                      c='red', marker='x', s=100, linewidths=3)
+        
         n_clusters = result['n_clusters']
         runtime = result['time']
-        subplot_titles.append(f"{method_name}<br>Clusters: {n_clusters}, Time: {runtime:.3f}s")
-    
-    fig = make_subplots(
-        rows=n_rows, 
-        cols=n_cols,
-        subplot_titles=subplot_titles,
-        horizontal_spacing=0.12,
-        vertical_spacing=0.2
-    )
-    
-    # Enhanced styling for True clusters
-    row, col = 1, 1
-    fig.add_trace(
-        go.Scatter(
-            x=X[:, 0], 
-            y=X[:, 1],
-            mode='markers',
-            marker=dict(
-                color=y_true, 
-                colorscale='viridis', 
-                size=6, 
-                opacity=0.8,
-                line=dict(width=0.5, color='white')
-            ),
-            name="True Clusters",
-            showlegend=False,
-            hovertemplate="<b>True Cluster</b><br>" +
-                         "Feature 1: %{x:.3f}<br>" +
-                         "Feature 2: %{y:.3f}<br>" +
-                         "Cluster: %{marker.color}<extra></extra>"
-        ),
-        row=row, col=col
-    )
-    
-    # Method results with enhanced styling
-    for i, (method_name, result) in enumerate(results.items()):
-        row = ((i + 1) // n_cols) + 1
-        col = ((i + 1) % n_cols) + 1
+        ax.set_title(f"{method_name}\nClusters: {n_clusters}, Time: {runtime:.3f}s")
+        ax.set_xlabel("Feature 1")
+        ax.set_ylabel("Feature 2")
+        ax.grid(True, alpha=0.3)
         
-        # Main scatter plot
-        fig.add_trace(
-            go.Scatter(
-                x=X[:, 0],
-                y=X[:, 1], 
-                mode='markers',
-                marker=dict(
-                    color=result['labels'], 
-                    colorscale='viridis', 
-                    size=6, 
-                    opacity=0.8,
-                    line=dict(width=0.5, color='white')
-                ),
-                name=method_name,
-                showlegend=False,
-                hovertemplate=f"<b>{method_name}</b><br>" +
-                             "Feature 1: %{x:.3f}<br>" +
-                             "Feature 2: %{y:.3f}<br>" +
-                             "Cluster: %{marker.color}<extra></extra>"
-            ),
-            row=row, col=col
-        )
-        
-        # Add cluster centers with enhanced styling
-        if result['centers'] is not None and len(result['centers']) > 0:
-            fig.add_trace(
-                go.Scatter(
-                    x=result['centers'][:, 0],
-                    y=result['centers'][:, 1],
-                    mode='markers',
-                    marker=dict(
-                        color='red', 
-                        symbol='x', 
-                        size=12, 
-                        line=dict(width=3, color='white')
-                    ),
-                    name=f"{method_name} Centers",
-                    showlegend=False,
-                    hovertemplate=f"<b>{method_name} Center</b><br>" +
-                                 "X: %{x:.3f}<br>" +
-                                 "Y: %{y:.3f}<extra></extra>"
-                ),
-                row=row, col=col
-            )
+        plot_idx += 1
     
-    # Update layout with experiment 1 styling
-    fig.update_layout(
-        height=400 * n_rows,
-        title_text="<b>Clustering Results: Data Distribution and Cluster Assignments</b>",
-        title_x=0.5,
-        title_font=dict(size=16),
-        font=dict(size=11),
-        showlegend=False,
-        plot_bgcolor='white'
-    )
+    plt.suptitle("Clustering Results: Data Distribution and Cluster Assignments", fontsize=16)
+    plt.tight_layout()
+    return fig
+
+def plot_clustering_result_streamlit(X, labels, config_name, n_samples, sample_frac=None, return_fig=True):
+    """Modified plot_clustering_result that returns figure for Streamlit"""
+    fig, ax = plt.subplots(figsize=(8, 6))
+    scatter = ax.scatter(X[:, 0], X[:, 1], c=labels, cmap='viridis', s=10, alpha=0.8)
     
-    # Update axes styling to match experiment plots
-    for i in range(1, n_rows + 1):
-        for j in range(1, n_cols + 1):
-            fig.update_xaxes(
-                title_text="Feature 1",
-                gridcolor='lightgray',
-                gridwidth=0.5,
-                zeroline=True,
-                zerolinecolor='gray',
-                zerolinewidth=1,
-                row=i, col=j
-            )
-            fig.update_yaxes(
-                title_text="Feature 2",
-                gridcolor='lightgray',
-                gridwidth=0.5,
-                zeroline=True,
-                zerolinecolor='gray',
-                zerolinewidth=1,
-                row=i, col=j
-            )
+    n_clusters = len(np.unique(labels))
     
+    if sample_frac is not None:
+        title = f"SAMS Clustering Result for '{config_name}'\n(n={n_samples:,}, sample={sample_frac*100:.0f}%, Clusters={n_clusters})"
+    else:
+        title = f"Data Distribution for '{config_name}'\n(n={n_samples:,} points, True Clusters={n_clusters})"
+    
+    ax.set_title(title)
+    ax.set_xlabel("Feature 1")
+    ax.set_ylabel("Feature 2")
+    ax.grid(True, alpha=0.3)
+    
+    # Add colorbar
+    plt.colorbar(scatter, ax=ax, label="Cluster ID")
+    
+    plt.tight_layout()
     return fig
 
 def create_data_distribution_plot(X, y_true, dataset_type, n_samples):
-    """Create data distribution plot exactly like experiment 1 (exp1_sams_gaussian.png)"""
-    
-    # Debug: Print data info
-    print(f"Data shape: {X.shape}")
-    print(f"X range: [{X[:, 0].min():.3f}, {X[:, 0].max():.3f}]")
-    print(f"Y range: [{X[:, 1].min():.3f}, {X[:, 1].max():.3f}]")
-    print(f"y_true unique values: {np.unique(y_true)}")
-    
-    # Create the scatter plot using go.Scatter (more control than px.scatter)
-    fig = go.Figure()
-    
-    # Get unique clusters and assign colors using viridis-like colors
-    unique_clusters = np.unique(y_true)
-    n_clusters = len(unique_clusters)
-    
-    # Use viridis colors to match experiment 1
-    import plotly.colors as pc
-    viridis_colors = pc.sample_colorscale('viridis', [i/(n_clusters-1) for i in range(n_clusters)])
-    
-    # Plot each cluster separately for proper color assignment
-    for i, cluster_id in enumerate(unique_clusters):
-        mask = y_true == cluster_id
-        cluster_points = X[mask]
-        
-        fig.add_trace(go.Scatter(
-            x=cluster_points[:, 0],
-            y=cluster_points[:, 1],
-            mode='markers',
-            marker=dict(
-                color=viridis_colors[i],
-                size=8,
-                opacity=0.8,
-                line=dict(width=0.5, color='white')
-            ),
-            name=f'Cluster {cluster_id}',
-            showlegend=True,
-            hovertemplate=f"<b>True Cluster {cluster_id}</b><br>" +
-                         "Feature 1: %{x:.3f}<br>" +
-                         "Feature 2: %{y:.3f}<extra></extra>"
-        ))
-    
-    # Update layout to match experiment 1 style
-    fig.update_layout(
-        title=f"Data Distribution for '{dataset_type}' (n={n_samples:,} points, True Clusters={n_clusters})",
-        xaxis_title="Feature 1",
-        yaxis_title="Feature 2",
-        plot_bgcolor='white',
-        height=600,
-        width=800,
-        font=dict(size=12),
-        title_x=0.5,
-        showlegend=True,
-        legend=dict(
-            yanchor="top",
-            y=0.99,
-            xanchor="left",
-            x=1.01
-        )
-    )
-    
-    # Add grid like in experiment 1
-    fig.update_xaxes(
-        showgrid=True,
-        gridwidth=1,
-        gridcolor='lightgray',
-        zeroline=True,
-        zerolinewidth=1,
-        zerolinecolor='gray'
-    )
-    fig.update_yaxes(
-        showgrid=True,
-        gridwidth=1,
-        gridcolor='lightgray',
-        zeroline=True,
-        zerolinewidth=1,
-        zerolinecolor='gray'
-    )
-    
-    return fig
+    """Create data distribution plot using the streamlit version of plot_clustering_result"""
+    return plot_clustering_result_streamlit(X, y_true, dataset_type, n_samples)
 
 def create_individual_clustering_plot(X, labels, method_name, result_info):
     """Create clustering result plot exactly like experiment 1 style"""
@@ -713,7 +585,6 @@ def create_individual_clustering_plot(X, labels, method_name, result_info):
     n_found_clusters = len(unique_clusters)
     
     # Use viridis colors to match experiment 1
-    import plotly.colors as pc
     if n_found_clusters > 1:
         viridis_colors = pc.sample_colorscale('viridis', [i/(n_found_clusters-1) for i in range(n_found_clusters)])
     else:
