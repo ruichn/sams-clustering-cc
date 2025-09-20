@@ -639,7 +639,6 @@ def create_data_distribution_plot(X, y_true, dataset_type, n_samples):
                 line=dict(width=0.5, color='white'),
                 colorbar=dict(
                     title="Cluster ID",
-                    titleside="right",
                     tickmode="linear",
                     tick0=0,
                     dtick=1
@@ -704,7 +703,6 @@ def create_individual_clustering_plot(X, labels, method_name, result_info):
                 line=dict(width=0.5, color='white'),
                 colorbar=dict(
                     title="Cluster ID",
-                    titleside="right",
                     tickmode="linear",
                     tick0=0,
                     dtick=1
