@@ -13,10 +13,7 @@ from matplotlib.gridspec import GridSpec
 import plotly.graph_objects as go
 import plotly.colors as pc
 from scipy.spatial.distance import cdist
-import sys
-import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src', 'experiments'))
-from experiment1_basic_performance import plot_clustering_result
+# Removed dependency on external experiment module for Hugging Face deployment
 
 # Standalone SAMS implementation for demo
 class DemoSAMS:
