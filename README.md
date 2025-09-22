@@ -2,7 +2,7 @@
 
 A complete implementation and validation of the **Stochastic Approximation Mean-Shift (SAMS)** clustering algorithm from:
 
-> Hyrien, O., & Baran, R. H. (2017). *Fast Nonparametric Density-Based Clustering of Large Data Sets Using a Stochastic Approximation Mean-Shift Algorithm*. PMC5417725.
+> Hyrien, O., & Baran, R. H. (2016). *Fast Nonparametric Density-Based Clustering of Large Data Sets Using a Stochastic Approximation Mean-Shift Algorithm*. PMC5417725.
 
 ## 🚀 Try the Live Demo
 
