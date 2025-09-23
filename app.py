@@ -204,7 +204,7 @@ def main():
         n_samples = st.slider(
             "Sample Size (n)",
             min_value=500,
-            max_value=100000,
+            max_value=20000,
             value=1000,
             step=100,
             help="Number of data points to generate"
