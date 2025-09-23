@@ -144,7 +144,7 @@ def main():
     st.title("SAMS: Stochastic Approximation Mean-Shift Clustering Demo")
     st.markdown("Interactive demonstration of the SAMS clustering algorithm with 2D and 3D dataset support.")
     st.markdown("""
-    **Interactive simulation studies for:** *"Fast Nonparametric Density-Based Clustering of Large Data Sets Using a Stochastic Approximation Mean-Shift Algorithm"* by Hyrien & Baran (2017)
+    **Interactive simulation studies for:** *"Fast Nonparametric Density-Based Clustering of Large Data Sets Using a Stochastic Approximation Mean-Shift Algorithm"* by Hyrien & Baran (2016)
     
     🎯 **Validated Performance:** 74-106x speedup with 91-99% quality retention
     
@@ -310,7 +310,7 @@ def main():
         compare_sklearn = st.checkbox(
             "Include Scikit-Learn Mean-Shift",
             value=True,
-            help="Compare with sklearn.cluster.MeanShift"
+            help="Compare with sklearn.cluster.MeanShift. Each algorithm uses its own optimal bandwidth estimation for fair comparison."
         )
         
         # Random seed
@@ -388,22 +388,28 @@ def run_clustering_experiment(dataset_type, n_samples, n_centers, noise_level, c
         with st.spinner("Running Scikit-Learn Mean-Shift..."):
             try:
                 if bandwidth is None:
-                    # Use same bandwidth as SAMS
-                    sklearn_bandwidth = sams.bandwidth
+                    # Let MeanShift use its own bandwidth estimation (estimate_bandwidth)
+                    ms = MeanShift(bandwidth=None, max_iter=max_iter)
                 else:
-                    sklearn_bandwidth = bandwidth
-                
-                ms = MeanShift(bandwidth=sklearn_bandwidth, max_iter=max_iter)
+                    # Use user-specified bandwidth for both algorithms
+                    ms = MeanShift(bandwidth=bandwidth, max_iter=max_iter)
                 
                 start_time = time.time()
                 labels_ms = ms.fit_predict(X)
                 ms_time = time.time() - start_time
                 
+                # Get the actual bandwidth used by MeanShift
+                if bandwidth is None:
+                    # MeanShift used internal estimate_bandwidth()
+                    actual_bandwidth = estimate_bandwidth(X)
+                else:
+                    actual_bandwidth = bandwidth
+                
                 results['Scikit-Learn Mean-Shift'] = {
                     'labels': labels_ms,
                     'centers': ms.cluster_centers_,
                     'time': ms_time,
-                    'bandwidth': sklearn_bandwidth,
+                    'bandwidth': actual_bandwidth,
                     'n_clusters': len(np.unique(labels_ms))
                 }
             except Exception as e:
@@ -1013,7 +1019,7 @@ def add_sidebar_info():
         st.markdown("---")
         st.subheader("Reference")
         st.markdown("""
-        Hyrien, O., & Baran, R. H. (2017). 
+        Hyrien, O., & Baran, R. H. (2016). 
         *Fast Nonparametric Density-Based 
         Clustering of Large Data Sets Using a 
         Stochastic Approximation Mean-Shift Algorithm.*
