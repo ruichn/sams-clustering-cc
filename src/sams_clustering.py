@@ -71,8 +71,22 @@ class SAMS_Clustering:
         if self.alpha2 is None:
             self.alpha2 = 1.0 / n_features
         
-        # Simplified pilot bandwidth for performance
-        h_pilot = 1.06 * np.std(X, axis=0).mean() * (n_samples**(-1.0/5))
+        # Dimension-aware pilot bandwidth for high-dimensional performance
+        base_pilot = 1.06 * np.std(X, axis=0).mean() * (n_samples**(-1.0/5))
+        
+        # Scale bandwidth for high dimensions to prevent over-clustering
+        if n_features <= 3:
+            h_pilot = base_pilot
+        elif n_features <= 10:
+            h_pilot = base_pilot * (1.0 + n_features / 20.0)
+        else:
+            # High dimensions: scale with sqrt of dimensionality
+            dimension_factor = np.sqrt(n_features / 3.0)
+            h_pilot = base_pilot * dimension_factor
+            
+            # Ensure minimum bandwidth for high-D data
+            min_bandwidth = 0.5 + (n_features - 10) * 0.02
+            h_pilot = max(h_pilot, min_bandwidth)
         
         # Efficient pilot density estimation (sample subset for speed)
         pilot_densities = np.zeros(n_samples)

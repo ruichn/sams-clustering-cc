@@ -32,11 +32,30 @@ class DemoSAMS:
         return np.exp(-0.5 * np.sum(diff**2, axis=1) / (h**2))
     
     def compute_bandwidth(self, X):
-        """Simple bandwidth estimation"""
+        """Dimension-aware bandwidth estimation for high-dimensional data"""
         if self.bandwidth is None:
             n_samples, n_features = X.shape
-            # Silverman's rule of thumb
-            self.bandwidth = 1.06 * np.std(X, axis=0).mean() * (n_samples**(-1.0/5))
+            
+            # Standard Silverman's rule for low dimensions
+            base_bandwidth = 1.06 * np.std(X, axis=0).mean() * (n_samples**(-1.0/5))
+            
+            # Scale bandwidth for high dimensions to prevent over-clustering
+            if n_features <= 3:
+                # Low dimensions: use standard rule
+                self.bandwidth = base_bandwidth
+            elif n_features <= 10:
+                # Medium dimensions: slight scaling
+                self.bandwidth = base_bandwidth * (1.0 + n_features / 20.0)
+            else:
+                # High dimensions: more aggressive scaling
+                # Scale with sqrt of dimensionality to handle curse of dimensionality
+                dimension_factor = np.sqrt(n_features / 3.0)
+                self.bandwidth = base_bandwidth * dimension_factor
+                
+                # Ensure minimum bandwidth for high-D data
+                min_bandwidth = 0.5 + (n_features - 10) * 0.02
+                self.bandwidth = max(self.bandwidth, min_bandwidth)
+                
         return self.bandwidth
     
     def vectorized_gradient_batch(self, modes_batch, sample_data, h):
