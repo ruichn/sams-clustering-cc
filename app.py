@@ -162,11 +162,13 @@ st.set_page_config(
 
 def main():
     st.title("SAMS: Stochastic Approximation Mean-Shift Clustering Demo")
-    st.markdown("Interactive demonstration of the SAMS clustering algorithm with 2D and 3D dataset support.")
+    st.markdown("Interactive demonstration of the SAMS clustering algorithm supporting arbitrary dimensions (1D-128D+).")
     st.markdown("""
     **Interactive simulation studies for:** *"Fast Nonparametric Density-Based Clustering of Large Data Sets Using a Stochastic Approximation Mean-Shift Algorithm"* by Hyrien & Baran (2016)
     
     🎯 **Validated Performance:** 74-106x speedup with 91-99% quality retention
+    
+    ✨ **Consistent Interface:** Separate data type selection from dimensionality control for intuitive parameter configuration.
     
     Explore the SAMS algorithm with customizable parameters and compare performance against standard mean-shift clustering.
     """)
@@ -178,60 +180,68 @@ def main():
         # Data generation parameters
         st.subheader("Data Generation")
         
-        # Dataset type
-        dataset_type = st.selectbox(
-            "Dataset Type",
-            ["Gaussian Blobs", "Concentric Circles", "Two Moons", "Mixed Densities", "3D Blobs", "3D Spheres", "High-Dimensional Blobs", "Image Segmentation"],
-            help="Choose the type of synthetic dataset to generate"
+        # Data type (distribution shape)
+        data_type = st.selectbox(
+            "Data Type",
+            ["Gaussian Blobs", "Concentric Circles", "Two Moons", "Mixed Densities", "Spheres", "Image Segmentation"],
+            help="Choose the distribution pattern/shape of the synthetic dataset"
         )
         
-        # Number of dimensions
-        if dataset_type.startswith("3D"):
-            n_features = 3
-            st.info("🌐 **3D Dataset Selected** - Visualizations will show 3D scatter plots")
-        elif dataset_type == "High-Dimensional Blobs":
-            n_features = st.slider(
-                "Number of Dimensions",
-                min_value=2,
-                max_value=128,
-                value=64,
-                step=1,
-                help="Choose dimensionality from 2D to 128D. Algorithm supports arbitrary dimensions - slider limited to 128D for practical demo purposes. Higher dimensions will use PCA for visualization."
-            )
-            if n_features > 10:
-                st.info(f"🔬 **{n_features}D High-Dimensional Mode** - Visualization will use PCA projection to 2D")
-            else:
-                st.info(f"📊 **{n_features}D Mode** - Standard clustering with {n_features} dimensions")
-        elif dataset_type == "Image Segmentation":
-            n_features = st.selectbox(
-                "Feature Type",
-                ["Intensity + Position (3D)", "Intensity Only (1D)", "Position Only (2D)", "Intensity + Gradient (2D)"],
+        # Number of dimensions (features)
+        if data_type == "Image Segmentation":
+            feature_type = st.selectbox(
+                "Feature Extraction",
+                ["Intensity + Position", "Intensity Only", "Position Only", "Intensity + Gradient"],
                 index=0,
                 help="Choose feature extraction method for image segmentation"
             )
-            # Map UI selection to internal format
-            if n_features == "Intensity + Position (3D)":
+            # Map UI selection to internal format and dimensions
+            if feature_type == "Intensity + Position":
                 feature_type = "intensity_position"
                 n_features = 3
-            elif n_features == "Intensity Only (1D)":
+            elif feature_type == "Intensity Only":
                 feature_type = "intensity_only"
                 n_features = 1
-            elif n_features == "Position Only (2D)":
+            elif feature_type == "Position Only":
                 feature_type = "position_only"
                 n_features = 2
             else:  # Intensity + Gradient
                 feature_type = "intensity_gradient"
                 n_features = 2
-            st.info("🖼️ **Image Segmentation** - Clustering pixels based on visual features")
+            st.info(f"🖼️ **Image Segmentation** - {n_features}D clustering with {feature_type.replace('_', ' ')} features")
         else:
-            n_features = st.selectbox(
+            n_features = st.slider(
                 "Number of Dimensions",
-                [2, 3],
-                index=0,
-                help="Choose 2D or 3D data dimensions"
+                min_value=1,
+                max_value=128,
+                value=2,
+                step=1,
+                help="Choose dimensionality from 1D to 128D. Algorithm supports arbitrary dimensions - slider limited to 128D for practical demo purposes. Higher dimensions will use PCA for visualization."
             )
-            if n_features == 3:
-                st.info("🌐 **3D Mode Enabled** - Visualizations will show 3D scatter plots")
+            
+            # Display dimension info
+            if n_features == 1:
+                st.info("📊 **1D Mode** - One-dimensional clustering")
+            elif n_features == 2:
+                st.info("📊 **2D Mode** - Standard two-dimensional clustering")
+            elif n_features == 3:
+                st.info("🌐 **3D Mode** - Three-dimensional clustering with 3D visualization")
+            elif n_features <= 10:
+                st.info(f"📊 **{n_features}D Mode** - Multi-dimensional clustering")
+            else:
+                st.info(f"🔬 **{n_features}D High-Dimensional Mode** - Visualization will use PCA projection to 2D")
+        
+        # Map to internal dataset_type for compatibility with existing generate_dataset function
+        if data_type == "Spheres":
+            dataset_type = "3D Spheres"  # Always use 3D spheres logic for spheres
+        elif data_type == "Gaussian Blobs" and n_features > 10:
+            dataset_type = "High-Dimensional Blobs"  # Use high-D logic for >10 dimensions
+        elif data_type == "Gaussian Blobs" and n_features == 3:
+            dataset_type = "3D Blobs"  # Use 3D blobs logic for exactly 3D
+        elif data_type == "Gaussian Blobs":
+            dataset_type = "Gaussian Blobs"  # Standard Gaussian blobs for other dimensions
+        else:
+            dataset_type = data_type  # Direct mapping for other types
         
         # Sample size
         n_samples = st.slider(
@@ -243,17 +253,17 @@ def main():
             help="Number of data points to generate"
         )
         
-        # Number of clusters (for applicable datasets)
-        if dataset_type in ["Gaussian Blobs", "Mixed Densities", "3D Blobs", "High-Dimensional Blobs"]:
+        # Number of clusters (for applicable data types)
+        if data_type in ["Gaussian Blobs", "Mixed Densities"]:
             n_centers = st.slider(
                 "Number of Clusters",
                 min_value=2,
-                max_value=8 if dataset_type == "High-Dimensional Blobs" else 6,
-                value=5 if dataset_type == "High-Dimensional Blobs" else 4,
+                max_value=8 if n_features >= 64 else 6,
+                value=5 if n_features >= 64 else 4,
                 help="Number of clusters in the dataset"
             )
-        elif dataset_type == "3D Spheres":
-            n_centers = 3  # Fixed for 3D spheres
+        elif data_type == "Spheres":
+            n_centers = 3  # Fixed for concentric spheres
         elif dataset_type == "Image Segmentation":
             col1, col2 = st.columns(2)
             with col1:
@@ -304,7 +314,7 @@ def main():
         st.markdown("**SAMS Configuration:**")
         
         # Adaptive parameter recommendations for high-dimensional data
-        if dataset_type == "High-Dimensional Blobs" and n_features >= 64:
+        if n_features >= 64:
             recommended_sample_fraction = max(2.0, min(5.0, 2.0 + (n_features - 64) / 32.0))
             st.info(f"💡 **High-D Recommendation**: Sample fraction ≥ {recommended_sample_fraction:.1f}% for {n_features}D data")
         
@@ -312,7 +322,7 @@ def main():
             "Sample Fraction (%)",
             min_value=0.5,
             max_value=10.0,
-            value=3.0 if dataset_type == "High-Dimensional Blobs" and n_features >= 64 else 2.0,
+            value=3.0 if n_features >= 64 else 2.0,
             step=0.5,
             help="Percentage of data points to sample at each iteration. Higher values recommended for high-dimensional data."
         ) / 100
@@ -736,9 +746,22 @@ def generate_dataset(dataset_type, n_samples, n_centers, noise_level, cluster_st
         # Return tuple with image for special visualization
         return X, y_true.astype(int), image
     
-    # Standardize (except for images)
-    scaler = StandardScaler()
-    X = scaler.fit_transform(X)
+    else:
+        # Default case: fallback to standard Gaussian blobs if no matching dataset type
+        X, y_true = make_blobs(
+            n_samples=n_samples,
+            centers=n_centers,
+            n_features=n_features,
+            cluster_std=cluster_std if cluster_std else 1.5,
+            random_state=42
+        )
+        # Add noise
+        X += np.random.normal(0, noise_level, X.shape)
+    
+    # Standardize (except for images and high-dimensional data which is pre-standardized)
+    if dataset_type != "High-Dimensional Blobs":
+        scaler = StandardScaler()
+        X = scaler.fit_transform(X)
     
     return X, y_true.astype(int)
 
