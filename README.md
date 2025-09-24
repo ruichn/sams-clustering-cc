@@ -174,7 +174,7 @@ The demo enables comprehensive simulation studies for:
 
 ## 📄 References
 
-1. **Original Paper**: Hyrien, O., & Baran, R. H. (2017). Fast Nonparametric Density-Based Clustering of Large Data Sets Using a Stochastic Approximation Mean-Shift Algorithm. *NIH Public Access*, PMC5417725.
+1. **Original Paper**: Hyrien, O., & Baran, R. H. (2016). Fast Nonparametric Density-Based Clustering of Large Data Sets Using a Stochastic Approximation Mean-Shift Algorithm. *NIH Public Access*, PMC5417725.
 
 2. **Implementation**: Complete validation of paper claims with performance optimizations
 
