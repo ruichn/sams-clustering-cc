@@ -348,7 +348,7 @@ def main():
         max_iter = st.slider(
             "Max Iterations",
             min_value=50,
-            max_value=2000,
+            max_value=5000,
             value=150,
             step=25,
             help="Maximum number of iterations"
