@@ -33,7 +33,7 @@ pip install -e ".[dev]"
 ## Quick Start
 
 ```python
-from sklearn_sams import SAMSClustering
+from scikit_sams import SAMSClustering
 from sklearn.datasets import make_blobs
 
 # Generate sample data
@@ -52,7 +52,7 @@ print(f"Found {clustering.n_clusters_} clusters")
 
 ```python
 import numpy as np
-from sklearn_sams import SAMSClustering
+from scikit_sams import SAMSClustering
 from sklearn.datasets import make_blobs
 
 # Create sample data
@@ -80,7 +80,7 @@ print(f"Iterations: {sams.n_iter_}")
 ```python
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
-from sklearn_sams import SAMSClustering
+from scikit_sams import SAMSClustering
 
 # Create pipeline
 pipeline = Pipeline([

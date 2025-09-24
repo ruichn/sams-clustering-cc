@@ -67,7 +67,7 @@ class SAMSClustering(ClusterMixin, BaseEstimator):
         
     Examples
     --------
-    >>> from sklearn_sams import SAMSClustering
+    >>> from scikit_sams import SAMSClustering
     >>> from sklearn.datasets import make_blobs
     >>> X, _ = make_blobs(n_samples=300, centers=4, random_state=42)
     >>> clustering = SAMSClustering(bandwidth=0.5, sample_fraction=0.02)

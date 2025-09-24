@@ -12,7 +12,7 @@ from sklearn.metrics import adjusted_rand_score, silhouette_score
 from sklearn.cluster import MeanShift
 import time
 
-from sklearn_sams import SAMSClustering
+from scikit_sams import SAMSClustering
 
 
 def basic_clustering_example():

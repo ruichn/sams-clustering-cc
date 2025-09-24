@@ -2,7 +2,7 @@ include README.md
 include LICENSE
 include pyproject.toml
 include MANIFEST.in
-recursive-include sklearn_sams *.py
+recursive-include scikit_sams *.py
 recursive-include examples *.py
 recursive-exclude * __pycache__
 recursive-exclude * *.py[co]

@@ -13,7 +13,7 @@ from sklearn.metrics import adjusted_rand_score
 from sklearn.cluster import MeanShift
 from sklearn.exceptions import NotFittedError
 
-from sklearn_sams import SAMSClustering
+from scikit_sams import SAMSClustering
 
 
 class TestSAMSClustering:

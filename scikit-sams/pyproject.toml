@@ -61,10 +61,10 @@ Repository = "https://github.com/yourusername/scikit-sams"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["sklearn_sams*"]
+include = ["scikit_sams*"]
 
 [tool.pytest.ini_options]
-testpaths = ["sklearn_sams/tests"]
+testpaths = ["scikit_sams/tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
