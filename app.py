@@ -756,35 +756,17 @@ def display_results(X, y_true, results, dataset_type, sample_fraction, col1, col
             st.pyplot(fig)
             plt.close(fig)
         
-        # 1. Data Distribution Plot (similar to experiment 1)
-        st.subheader("Data Distribution")
-        fig = create_data_distribution_plot(X, y_true, dataset_type, len(X))
-        st.pyplot(fig)
-        
-        # 2. Individual clustering results
-        st.subheader("Clustering Results")
-        for method_name, result in results.items():
-            st.markdown(f"**{method_name}:**")
-            if method_name == "SAMS":
-                # Use the plot_clustering_result style for SAMS
-                fig = plot_clustering_result_streamlit(X, result['labels'], dataset_type, len(X), sample_fraction)
-                st.pyplot(fig)
-            else:
-                # Use original plotting for other methods (now returns matplotlib figure)
-                fig = create_individual_clustering_plot(X, result['labels'], method_name, result)
-                st.pyplot(fig)
-        
-        # 3. Side-by-side comparison
-        st.subheader("Side-by-Side Comparison")
+        # Side-by-side comparison (removed individual plots to avoid duplication)
+        st.subheader("Clustering Results Comparison")
         fig = create_clustering_plot(X, y_true, results)
         st.pyplot(fig)
         
-        # 4. Performance metrics
+        # Performance metrics
         st.subheader("Performance Metrics")
         metrics_df = calculate_metrics(X, y_true, results)
         st.dataframe(metrics_df, use_container_width=True)
         
-        # 5. Runtime comparison if multiple methods
+        # Runtime comparison if multiple methods
         if len(results) > 1:
             st.subheader("Runtime Comparison")
             fig = create_runtime_plot(results)
