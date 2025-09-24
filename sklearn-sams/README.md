@@ -1,7 +1,7 @@
-# sklearn-sams
+# scikit-sams
 
-[![PyPI version](https://badge.fury.io/py/sklearn-sams.svg)](https://badge.fury.io/py/sklearn-sams)
-[![Python versions](https://img.shields.io/pypi/pyversions/sklearn-sams.svg)](https://pypi.org/project/sklearn-sams/)
+[![PyPI version](https://badge.fury.io/py/scikit-sams.svg)](https://badge.fury.io/py/scikit-sams)
+[![Python versions](https://img.shields.io/pypi/pyversions/scikit-sams.svg)](https://pypi.org/project/scikit-sams/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **Scikit-learn compatible implementation of the Stochastic Approximation Mean-Shift (SAMS) clustering algorithm.**
@@ -19,14 +19,14 @@ SAMS is a fast approximation to the mean-shift clustering algorithm that achieve
 ## Installation
 
 ```bash
-pip install sklearn-sams
+pip install scikit-sams
 ```
 
 ### Development Installation
 
 ```bash
-git clone https://github.com/yourusername/sklearn-sams.git
-cd sklearn-sams
+git clone https://github.com/yourusername/scikit-sams.git
+cd scikit-sams
 pip install -e ".[dev]"
 ```
 
