@@ -244,14 +244,19 @@ def main():
             dataset_type = data_type  # Direct mapping for other types
         
         # Sample size
-        n_samples = st.slider(
+        n_samples = st.number_input(
             "Sample Size (n)",
             min_value=500,
-            max_value=20000,
             value=1000,
             step=100,
-            help="Number of data points to generate"
+            help="Number of data points to generate (no upper limit for scalability testing)"
         )
+        
+        # Warning for very large datasets
+        if n_samples > 1000000:
+            st.error(f"**Very Large Dataset**: {n_samples:,} points may require significant memory and processing time. Recommended sample fraction: ≤0.1%")
+        elif n_samples > 100000:
+            st.warning(f"**Large Dataset**: {n_samples:,} points selected. Consider using lower sample fractions (0.1-0.5%) for faster processing.")
         
         # Number of clusters (for applicable data types)
         if data_type in ["Gaussian Blobs", "Mixed Densities"]:
@@ -320,11 +325,11 @@ def main():
         
         sample_fraction = st.slider(
             "Sample Fraction (%)",
-            min_value=0.5,
+            min_value=0.1,
             max_value=10.0,
             value=3.0 if n_features >= 64 else 2.0,
-            step=0.5,
-            help="Percentage of data points to sample at each iteration. Higher values recommended for high-dimensional data."
+            step=0.1,
+            help="Percentage of data points to sample at each iteration. Lower values enable processing of very large datasets. Higher values recommended for high-dimensional data."
         ) / 100
         
         bandwidth_mode = st.radio(
