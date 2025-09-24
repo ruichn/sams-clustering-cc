@@ -326,10 +326,10 @@ def main():
         sample_fraction = st.slider(
             "Sample Fraction (%)",
             min_value=0.1,
-            max_value=10.0,
+            max_value=100.0,
             value=3.0 if n_features >= 64 else 2.0,
             step=0.1,
-            help="Percentage of data points to sample at each iteration. Lower values enable processing of very large datasets. Higher values recommended for high-dimensional data."
+            help="Percentage of data points to sample at each iteration. Lower values enable processing of very large datasets. Higher values recommended for high-dimensional data. 100% = standard mean-shift."
         ) / 100
         
         bandwidth_mode = st.radio(
