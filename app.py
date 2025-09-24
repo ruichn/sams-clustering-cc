@@ -165,11 +165,7 @@ def main():
     st.markdown("Interactive demonstration of the SAMS clustering algorithm supporting arbitrary dimensions (1D-128D+).")
     st.markdown("""
     **Interactive simulation studies for:** *"Fast Nonparametric Density-Based Clustering of Large Data Sets Using a Stochastic Approximation Mean-Shift Algorithm"* by Hyrien & Baran (2016)
-    
-    🎯 **Validated Performance:** 74-106x speedup with 91-99% quality retention
-    
-    ✨ **Consistent Interface:** Separate data type selection from dimensionality control for intuitive parameter configuration.
-    
+        
     Explore the SAMS algorithm with customizable parameters and compare performance against standard mean-shift clustering.
     """)
     
@@ -183,7 +179,7 @@ def main():
         # Data type (distribution shape)
         data_type = st.selectbox(
             "Data Type",
-            ["Gaussian Blobs", "Concentric Circles", "Two Moons", "Mixed Densities", "Spheres", "Image Segmentation"],
+            ["Gaussian Blobs", "Mixed Densities", "Two Moons", "Image Segmentation"],
             help="Choose the distribution pattern/shape of the synthetic dataset"
         )
         
@@ -191,7 +187,7 @@ def main():
         if data_type == "Image Segmentation":
             feature_type = st.selectbox(
                 "Feature Extraction",
-                ["Intensity + Position", "Intensity Only", "Position Only", "Intensity + Gradient"],
+                ["Intensity + Position", "Intensity Only"],
                 index=0,
                 help="Choose feature extraction method for image segmentation"
             )
@@ -244,32 +240,15 @@ def main():
             dataset_type = data_type  # Direct mapping for other types
         
         # Sample size
-        n_samples = st.number_input(
-            "Sample Size (n)",
-            min_value=500,
-            value=1000,
-            step=100,
-            help="Number of data points to generate (no upper limit for scalability testing)"
-        )
-        
-        # Warning for very large datasets
-        if n_samples > 1000000:
-            st.error(f"**Very Large Dataset**: {n_samples:,} points may require significant memory and processing time. Recommended sample fraction: ≤0.1%")
-        elif n_samples > 100000:
-            st.warning(f"**Large Dataset**: {n_samples:,} points selected. Consider using lower sample fractions (0.1-0.5%) for faster processing.")
-        
-        # Number of clusters (for applicable data types)
-        if data_type in ["Gaussian Blobs", "Mixed Densities"]:
-            n_centers = st.slider(
-                "Number of Clusters",
-                min_value=2,
-                max_value=8 if n_features >= 64 else 6,
-                value=5 if n_features >= 64 else 4,
-                help="Number of clusters in the dataset"
+        if data_type != "Image Segmentation":
+            n_samples = st.number_input(
+                "Sample Size (n)",
+                min_value=500,
+                value=1000,
+                step=100,
+                help="Number of data points to generate (no upper limit for scalability testing)"
             )
-        elif data_type == "Spheres":
-            n_centers = 3  # Fixed for concentric spheres
-        elif dataset_type == "Image Segmentation":
+        else:
             col1, col2 = st.columns(2)
             with col1:
                 image_size = st.selectbox(
@@ -289,8 +268,24 @@ def main():
             # Parse image size
             img_width, img_height = map(int, image_size.split('x'))
             n_samples = img_width * img_height  # Override sample size for images
-        else:
-            n_centers = 2  # Fixed for circles and moons
+        
+        # Warning for very large datasets
+        if n_samples > 1000000:
+            st.error(f"**Very Large Dataset**: {n_samples:,} points may require significant memory and processing time. Recommended sample fraction: ≤0.1%")
+        elif n_samples > 100000:
+            st.warning(f"**Large Dataset**: {n_samples:,} points selected. Consider using lower sample fractions (0.1-0.5%) for faster processing.")
+        
+        # Number of clusters (for applicable data types)
+        if data_type in ["Gaussian Blobs", "Mixed Densities"]:
+            n_centers = st.slider(
+                "Number of Clusters",
+                min_value=2,
+                max_value=10,
+                value=4,
+                help="Number of clusters in the dataset"
+            )
+        elif data_type == "Two Moons":
+            n_centers = 2
         
         # Noise level
         noise_level = st.slider(
@@ -353,7 +348,7 @@ def main():
         max_iter = st.slider(
             "Max Iterations",
             min_value=50,
-            max_value=300,
+            max_value=2000,
             value=150,
             step=25,
             help="Maximum number of iterations"
