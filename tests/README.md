@@ -14,6 +14,9 @@ This directory contains comprehensive tests for the SAMS (Stochastic Approximati
 - **`test_3d_demo.py`** - Comprehensive 3D demo application testing
 - **`experiment_3d_validation.py`** - Full 3D clustering validation experiment
 
+### High-Dimensional Functionality Tests
+- **`test_high_dim_demo.py`** - High-dimensional clustering functionality testing (2D-128D)
+
 ### Test Data & Reports
 - **`3D_VALIDATION_REPORT.txt`** - Detailed 3D validation results
 - **`3d_validation_report.py`** - Report generation script
@@ -36,6 +39,9 @@ python test_3d_capability.py
 
 # Test demo functionality
 python test_3d_demo.py
+
+# Test high-dimensional capabilities
+python test_high_dim_demo.py
 
 # Run comprehensive 3D experiment
 python experiment_3d_validation.py
@@ -73,6 +79,13 @@ python tests/test_imports.py
 - 3D visualization with matplotlib
 - Performance validation
 
+### ✅ **High-Dimensional Clustering**
+- SAMS algorithm on 2D-128D data
+- High-dimensional dataset generation with standardization
+- PCA-based visualization for dimensions >3D
+- Dimensional scaling performance analysis
+- Parameter adaptation validation
+
 ### ✅ **Demo Application**
 - Streamlit app functionality
 - Dataset generation across dimensions
@@ -88,6 +101,7 @@ When all tests pass, you should see:
 ✅ Experiment Functions PASSED
 ✅ 3D Basic Capability PASSED
 ✅ 3D Demo Functionality PASSED
+✅ High-Dimensional Demo PASSED
 
 🎉 ALL TESTS PASSED! SAMS implementation is working correctly.
 ```

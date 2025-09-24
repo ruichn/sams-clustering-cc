@@ -6,6 +6,7 @@ from sklearn.datasets import make_blobs, make_circles, make_moons
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score, silhouette_score
 from sklearn.cluster import MeanShift, estimate_bandwidth
+from sklearn.decomposition import PCA
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -161,7 +162,7 @@ def main():
         # Dataset type
         dataset_type = st.selectbox(
             "Dataset Type",
-            ["Gaussian Blobs", "Concentric Circles", "Two Moons", "Mixed Densities", "3D Blobs", "3D Spheres", "Image Segmentation"],
+            ["Gaussian Blobs", "Concentric Circles", "Two Moons", "Mixed Densities", "3D Blobs", "3D Spheres", "High-Dimensional Blobs", "Image Segmentation"],
             help="Choose the type of synthetic dataset to generate"
         )
         
@@ -169,6 +170,19 @@ def main():
         if dataset_type.startswith("3D"):
             n_features = 3
             st.info("🌐 **3D Dataset Selected** - Visualizations will show 3D scatter plots")
+        elif dataset_type == "High-Dimensional Blobs":
+            n_features = st.slider(
+                "Number of Dimensions",
+                min_value=2,
+                max_value=128,
+                value=64,
+                step=1,
+                help="Choose dimensionality from 2D to 128D. Algorithm supports arbitrary dimensions - slider limited to 128D for practical demo purposes. Higher dimensions will use PCA for visualization."
+            )
+            if n_features > 10:
+                st.info(f"🔬 **{n_features}D High-Dimensional Mode** - Visualization will use PCA projection to 2D")
+            else:
+                st.info(f"📊 **{n_features}D Mode** - Standard clustering with {n_features} dimensions")
         elif dataset_type == "Image Segmentation":
             n_features = st.selectbox(
                 "Feature Type",
@@ -211,12 +225,12 @@ def main():
         )
         
         # Number of clusters (for applicable datasets)
-        if dataset_type in ["Gaussian Blobs", "Mixed Densities", "3D Blobs"]:
+        if dataset_type in ["Gaussian Blobs", "Mixed Densities", "3D Blobs", "High-Dimensional Blobs"]:
             n_centers = st.slider(
                 "Number of Clusters",
                 min_value=2,
-                max_value=6,
-                value=4,
+                max_value=8 if dataset_type == "High-Dimensional Blobs" else 6,
+                value=5 if dataset_type == "High-Dimensional Blobs" else 4,
                 help="Number of clusters in the dataset"
             )
         elif dataset_type == "3D Spheres":
@@ -269,13 +283,19 @@ def main():
         
         # SAMS parameters
         st.markdown("**SAMS Configuration:**")
+        
+        # Adaptive parameter recommendations for high-dimensional data
+        if dataset_type == "High-Dimensional Blobs" and n_features >= 64:
+            recommended_sample_fraction = max(2.0, min(5.0, 2.0 + (n_features - 64) / 32.0))
+            st.info(f"💡 **High-D Recommendation**: Sample fraction ≥ {recommended_sample_fraction:.1f}% for {n_features}D data")
+        
         sample_fraction = st.slider(
             "Sample Fraction (%)",
             min_value=0.5,
             max_value=10.0,
-            value=2.0,
+            value=3.0 if dataset_type == "High-Dimensional Blobs" and n_features >= 64 else 2.0,
             step=0.5,
-            help="Percentage of data points to sample at each iteration"
+            help="Percentage of data points to sample at each iteration. Higher values recommended for high-dimensional data."
         ) / 100
         
         bandwidth_mode = st.radio(
@@ -641,6 +661,24 @@ def generate_dataset(dataset_type, n_samples, n_centers, noise_level, cluster_st
         # Add noise
         X += np.random.normal(0, noise_level, X.shape)
     
+    elif dataset_type == "High-Dimensional Blobs":
+        # Generate high-dimensional clustered data with standardization
+        X, y_true = make_blobs(
+            n_samples=n_samples,
+            centers=n_centers,
+            n_features=n_features,
+            cluster_std=1.5,  # Slightly higher std for better separation in high dimensions
+            center_box=(-5.0, 5.0),
+            random_state=42
+        )
+        # Add noise scaled appropriately for high dimensions
+        noise_scale = noise_level * np.sqrt(n_features / 2.0)  # Scale noise with dimensionality
+        X += np.random.normal(0, noise_scale, X.shape)
+        
+        # Standardize features for high dimensions
+        scaler = StandardScaler()
+        X = scaler.fit_transform(X)
+    
     elif dataset_type == "Image Segmentation":
         # Generate synthetic image
         if image_size is None:
@@ -759,6 +797,24 @@ def display_results(X, y_true, results, dataset_type, sample_fraction, col1, col
                 speedup = sklearn_result['time'] / sams_result['time']
                 speedup_text = f"\n\n**{speedup:.1f}x faster than sklearn**"
             
+            # Enhanced metrics for high-dimensional data
+            high_d_metrics = ""
+            data_shape = X.shape if 'X' in locals() else (0, 0)
+            data_n_features = data_shape[1] if len(data_shape) > 1 else 2
+            data_n_samples = data_shape[0] if len(data_shape) > 0 else 1000
+            
+            if dataset_type == "High-Dimensional Blobs" and data_n_features > 10:
+                # Calculate dimensionality-adjusted performance
+                samples_per_dim = data_n_samples / data_n_features
+                runtime_per_dim = sams_result['time'] / data_n_features
+                high_d_metrics = f"\n\n**High-D Analysis:**\n📏 **Dimensionality:** {data_n_features}D\n📊 **Samples/Dimension:** {samples_per_dim:.1f}\n⚡ **Runtime/Dimension:** {runtime_per_dim:.4f}s"
+                
+                # Performance assessment
+                if sams_result['time'] < 1.0 and data_n_features >= 64:
+                    high_d_metrics += "\n✅ **Excellent high-D performance**"
+                elif sams_result['time'] < 2.0:
+                    high_d_metrics += "\n👍 **Good high-D performance**"
+            
             st.success(f"""
             **SAMS Performance**
             
@@ -767,7 +823,7 @@ def display_results(X, y_true, results, dataset_type, sample_fraction, col1, col
             ⏱️ **Runtime:** {sams_result['time']:.3f}s
             
             🎛️ **Bandwidth:** {sams_result['bandwidth']:.4f}
-            {speedup_text}
+            {speedup_text}{high_d_metrics}
             """)
         
         if sklearn_result:
@@ -795,18 +851,29 @@ def display_results(X, y_true, results, dataset_type, sample_fraction, col1, col
                 pass
 
 def create_clustering_plot(X, y_true, results):
-    """Create clustering visualization using matplotlib with 3D support"""
+    """Create clustering visualization with support for high-dimensional data using PCA"""
     
     n_methods = len(results) + 1  # +1 for true clusters
     n_cols = min(3, n_methods)
     n_rows = (n_methods + n_cols - 1) // n_cols
     
     is_3d = X.shape[1] == 3
+    is_high_d = X.shape[1] > 3
+    
+    # For high-dimensional data, use PCA for visualization
+    X_plot = X
+    pca_info = ""
+    if is_high_d:
+        pca = PCA(n_components=2, random_state=42)
+        X_plot = pca.fit_transform(X)
+        explained_var = pca.explained_variance_ratio_[:2].sum()
+        pca_info = f" (PCA: {explained_var:.1%} variance explained)"
+    
     fig_height = 8 if is_3d else 6
     fig = plt.figure(figsize=(12, fig_height * n_rows))
     
     # Plot True clusters
-    if is_3d:
+    if is_3d and not is_high_d:
         ax = fig.add_subplot(n_rows, n_cols, 1, projection='3d')
         scatter = ax.scatter(X[:, 0], X[:, 1], X[:, 2], c=y_true, cmap='viridis', s=20, alpha=0.7)
         ax.set_xlabel("Feature 1")
@@ -814,17 +881,24 @@ def create_clustering_plot(X, y_true, results):
         ax.set_zlabel("Feature 3")
     else:
         ax = fig.add_subplot(n_rows, n_cols, 1)
-        scatter = ax.scatter(X[:, 0], X[:, 1], c=y_true, cmap='viridis', s=10, alpha=0.8)
-        ax.set_xlabel("Feature 1")
-        ax.set_ylabel("Feature 2")
+        if is_high_d:
+            scatter = ax.scatter(X_plot[:, 0], X_plot[:, 1], c=y_true, cmap='viridis', s=15, alpha=0.7)
+            ax.set_xlabel(f"PC1 ({pca.explained_variance_ratio_[0]:.1%} var)")
+            ax.set_ylabel(f"PC2 ({pca.explained_variance_ratio_[1]:.1%} var)")
+        else:
+            scatter = ax.scatter(X[:, 0], X[:, 1], c=y_true, cmap='viridis', s=10, alpha=0.8)
+            ax.set_xlabel("Feature 1")
+            ax.set_ylabel("Feature 2")
         ax.grid(True, alpha=0.3)
     
-    ax.set_title(f"True Clusters (n={len(X):,})")
+    true_clusters = len(np.unique(y_true))
+    dim_info = f"{X.shape[1]}D" if is_high_d else ""
+    ax.set_title(f"True Clusters {dim_info}(n={len(X):,}, k={true_clusters}){pca_info}")
     
     # Plot method results
     plot_idx = 2
     for method_name, result in results.items():
-        if is_3d:
+        if is_3d and not is_high_d:
             ax = fig.add_subplot(n_rows, n_cols, plot_idx, projection='3d')
             scatter = ax.scatter(X[:, 0], X[:, 1], X[:, 2], c=result['labels'], cmap='viridis', s=20, alpha=0.7)
             
@@ -838,15 +912,27 @@ def create_clustering_plot(X, y_true, results):
             ax.set_zlabel("Feature 3")
         else:
             ax = fig.add_subplot(n_rows, n_cols, plot_idx)
-            scatter = ax.scatter(X[:, 0], X[:, 1], c=result['labels'], cmap='viridis', s=10, alpha=0.8)
-            
-            # Add cluster centers for 2D
-            if result['centers'] is not None and len(result['centers']) > 0:
-                ax.scatter(result['centers'][:, 0], result['centers'][:, 1], 
-                          c='red', marker='x', s=100, linewidths=3)
-            
-            ax.set_xlabel("Feature 1")
-            ax.set_ylabel("Feature 2")
+            if is_high_d:
+                scatter = ax.scatter(X_plot[:, 0], X_plot[:, 1], c=result['labels'], cmap='viridis', s=15, alpha=0.7)
+                
+                # Project cluster centers to 2D using same PCA
+                if result['centers'] is not None and len(result['centers']) > 0:
+                    centers_2d = pca.transform(result['centers'])
+                    ax.scatter(centers_2d[:, 0], centers_2d[:, 1], 
+                              c='red', marker='x', s=120, linewidths=4)
+                
+                ax.set_xlabel(f"PC1 ({pca.explained_variance_ratio_[0]:.1%} var)")
+                ax.set_ylabel(f"PC2 ({pca.explained_variance_ratio_[1]:.1%} var)")
+            else:
+                scatter = ax.scatter(X[:, 0], X[:, 1], c=result['labels'], cmap='viridis', s=10, alpha=0.8)
+                
+                # Add cluster centers for 2D
+                if result['centers'] is not None and len(result['centers']) > 0:
+                    ax.scatter(result['centers'][:, 0], result['centers'][:, 1], 
+                              c='red', marker='x', s=100, linewidths=3)
+                
+                ax.set_xlabel("Feature 1")
+                ax.set_ylabel("Feature 2")
             ax.grid(True, alpha=0.3)
         
         n_clusters = result['n_clusters']

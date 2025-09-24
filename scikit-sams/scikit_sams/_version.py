@@ -1,3 +1,3 @@
-"""Version information for sklearn-sams."""
+"""Version information for scikit-sams."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
