@@ -881,6 +881,8 @@ def create_clustering_plot(X, y_true, results):
     n_cols = min(3, n_methods)
     n_rows = (n_methods + n_cols - 1) // n_cols
     
+    is_1d = X.shape[1] == 1
+    is_2d = X.shape[1] == 2
     is_3d = X.shape[1] == 3
     is_high_d = X.shape[1] > 3
     
@@ -909,7 +911,13 @@ def create_clustering_plot(X, y_true, results):
             scatter = ax.scatter(X_plot[:, 0], X_plot[:, 1], c=y_true, cmap='viridis', s=15, alpha=0.7)
             ax.set_xlabel(f"PC1 ({pca.explained_variance_ratio_[0]:.1%} var)")
             ax.set_ylabel(f"PC2 ({pca.explained_variance_ratio_[1]:.1%} var)")
-        else:
+        elif is_1d:
+            # 1D visualization: feature value vs cluster ID (with jitter)
+            y_jitter = y_true + np.random.normal(0, 0.1, len(y_true))
+            scatter = ax.scatter(X[:, 0], y_jitter, c=y_true, cmap='viridis', s=20, alpha=0.8)
+            ax.set_xlabel("Feature 1")
+            ax.set_ylabel("True Cluster ID (with jitter)")
+        else:  # is_2d
             scatter = ax.scatter(X[:, 0], X[:, 1], c=y_true, cmap='viridis', s=10, alpha=0.8)
             ax.set_xlabel("Feature 1")
             ax.set_ylabel("Feature 2")
@@ -947,7 +955,20 @@ def create_clustering_plot(X, y_true, results):
                 
                 ax.set_xlabel(f"PC1 ({pca.explained_variance_ratio_[0]:.1%} var)")
                 ax.set_ylabel(f"PC2 ({pca.explained_variance_ratio_[1]:.1%} var)")
-            else:
+            elif is_1d:
+                # 1D visualization: feature value vs cluster ID (with jitter)
+                y_jitter = result['labels'] + np.random.normal(0, 0.1, len(result['labels']))
+                scatter = ax.scatter(X[:, 0], y_jitter, c=result['labels'], cmap='viridis', s=20, alpha=0.8)
+                
+                # Add cluster centers if available
+                if result['centers'] is not None and len(result['centers']) > 0:
+                    ax.scatter(result['centers'][:, 0], 
+                              range(len(result['centers'])),  # Use cluster indices as y-positions
+                              c='red', marker='x', s=120, linewidths=3)
+                
+                ax.set_xlabel("Feature 1")
+                ax.set_ylabel("Cluster ID (with jitter)")
+            else:  # is_2d
                 scatter = ax.scatter(X[:, 0], X[:, 1], c=result['labels'], cmap='viridis', s=10, alpha=0.8)
                 
                 # Add cluster centers for 2D
@@ -992,7 +1013,7 @@ def plot_clustering_result_streamlit(X, labels, config_name, n_samples, sample_f
         
         # Add colorbar
         plt.colorbar(scatter, ax=ax, label="Cluster ID", shrink=0.5)
-    else:
+    elif X.shape[1] == 2:
         # 2D plot
         fig, ax = plt.subplots(figsize=(8, 6))
         scatter = ax.scatter(X[:, 0], X[:, 1], c=labels, cmap='viridis', s=10, alpha=0.8)
@@ -1000,6 +1021,19 @@ def plot_clustering_result_streamlit(X, labels, config_name, n_samples, sample_f
         ax.set_title(title)
         ax.set_xlabel("Feature 1")
         ax.set_ylabel("Feature 2")
+        ax.grid(True, alpha=0.3)
+        
+        # Add colorbar
+        plt.colorbar(scatter, ax=ax, label="Cluster ID")
+    else:
+        # 1D plot - use scatter plot with y-axis as cluster assignment
+        fig, ax = plt.subplots(figsize=(8, 6))
+        y_jitter = labels + np.random.normal(0, 0.1, len(labels))  # Add slight jitter for visibility
+        scatter = ax.scatter(X[:, 0], y_jitter, c=labels, cmap='viridis', s=20, alpha=0.8)
+        
+        ax.set_title(title)
+        ax.set_xlabel("Feature 1")
+        ax.set_ylabel("Cluster ID (with jitter)")
         ax.grid(True, alpha=0.3)
         
         # Add colorbar
@@ -1024,17 +1058,30 @@ def create_individual_clustering_plot(X, labels, method_name, result_info):
     fig, ax = plt.subplots(figsize=(8, 6))
     
     # Plot data points colored by cluster assignment
-    scatter = ax.scatter(X[:, 0], X[:, 1], c=labels, cmap='viridis', s=10, alpha=0.8)
+    if X.shape[1] == 1:
+        # 1D plot: feature value vs cluster ID with jitter
+        y_jitter = labels + np.random.normal(0, 0.1, len(labels))
+        scatter = ax.scatter(X[:, 0], y_jitter, c=labels, cmap='viridis', s=20, alpha=0.8)
+        ax.set_xlabel("Feature 1")
+        ax.set_ylabel("Cluster ID (with jitter)")
+    else:
+        # 2D+ plot
+        scatter = ax.scatter(X[:, 0], X[:, 1], c=labels, cmap='viridis', s=10, alpha=0.8)
+        ax.set_xlabel("Feature 1")
+        ax.set_ylabel("Feature 2")
     
     # Add cluster centers as red X markers
     if result_info.get('centers') is not None and len(result_info['centers']) > 0:
         centers = result_info['centers']
-        ax.scatter(centers[:, 0], centers[:, 1], c='red', marker='x', s=100, linewidths=3, label='Centers')
+        if X.shape[1] == 1:
+            # For 1D: plot centers on x-axis at y-positions corresponding to cluster indices
+            ax.scatter(centers[:, 0], range(len(centers)), c='red', marker='x', s=120, linewidths=3, label='Centers')
+        else:
+            # For 2D+: plot centers normally
+            ax.scatter(centers[:, 0], centers[:, 1], c='red', marker='x', s=100, linewidths=3, label='Centers')
     
-    # Set title and labels
+    # Set title and labels (already set above based on dimensionality)
     ax.set_title(f"{method_name} Clustering Result\n(n={len(X):,}, Clusters={n_clusters}, Time={runtime:.3f}s, BW={bandwidth:.4f})")
-    ax.set_xlabel("Feature 1")
-    ax.set_ylabel("Feature 2")
     ax.grid(True, alpha=0.3)
     
     # Add colorbar
