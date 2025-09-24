@@ -657,35 +657,39 @@ def generate_dataset(dataset_type, n_samples, n_centers, noise_level, cluster_st
         # Create clusters with different densities
         np.random.seed(42)
         
-        if n_features == 3:
-            # 3D mixed densities
-            # High density cluster
-            n1 = n_samples // 3
-            cluster1 = np.random.multivariate_normal([0, 0, 0], np.eye(3) * 0.3, size=n1)
-            
-            # Medium density cluster  
-            n2 = n_samples // 3
-            cluster2 = np.random.multivariate_normal([3, 3, 1], np.eye(3) * 1.0, size=n2)
-            
-            # Low density cluster
-            n3 = n_samples - n1 - n2
-            cluster3 = np.random.multivariate_normal([-2, 2, -1], np.eye(3) * 1.8, size=n3)
-        else:
-            # 2D mixed densities
-            # High density cluster
-            n1 = n_samples // 3
-            cluster1 = np.random.multivariate_normal([0, 0], [[0.3, 0], [0, 0.3]], size=n1)
-            
-            # Medium density cluster  
-            n2 = n_samples // 3
-            cluster2 = np.random.multivariate_normal([3, 3], [[1.0, 0], [0, 1.0]], size=n2)
-            
-            # Low density cluster
-            n3 = n_samples - n1 - n2
-            cluster3 = np.random.multivariate_normal([-2, 2], [[1.8, 0], [0, 1.8]], size=n3)
+        # Generate n_centers clusters with varying densities
+        clusters = []
+        labels = []
         
-        X = np.vstack([cluster1, cluster2, cluster3])
-        y_true = np.hstack([np.zeros(n1), np.ones(n2), np.full(n3, 2)])
+        # Define density levels (variance) for different clusters
+        density_levels = np.linspace(0.3, 2.0, n_centers)  # From high to low density
+        
+        # Generate cluster centers
+        if n_features == 3:
+            centers = np.random.uniform(-3, 3, (n_centers, 3))
+        else:
+            centers = np.random.uniform(-3, 3, (n_centers, n_features))
+        
+        # Distribute samples across clusters
+        samples_per_cluster = [n_samples // n_centers] * n_centers
+        samples_per_cluster[-1] += n_samples % n_centers  # Add remainder to last cluster
+        
+        for i in range(n_centers):
+            n_cluster = samples_per_cluster[i]
+            center = centers[i]
+            density = density_levels[i]
+            
+            if n_features == 3:
+                cov_matrix = np.eye(3) * density
+            else:
+                cov_matrix = np.eye(n_features) * density
+            
+            cluster_data = np.random.multivariate_normal(center, cov_matrix, size=n_cluster)
+            clusters.append(cluster_data)
+            labels.extend([i] * n_cluster)
+        
+        X = np.vstack(clusters)
+        y_true = np.array(labels)
         
         # Add noise
         X += np.random.normal(0, noise_level, X.shape)
