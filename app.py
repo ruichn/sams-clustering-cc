@@ -12,9 +12,117 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.mplot3d import Axes3D
+from scipy.spatial.distance import cdist
+
 # Removed Plotly imports - using matplotlib only
-# Import the main SAMS implementation
-from sams_clustering import SAMS_Clustering
+# Import the main SAMS implementation with embedded fallback
+try:
+    from sams_clustering import SAMS_Clustering
+except ImportError:
+    # If import fails, create a minimal embedded version
+    class SAMS_Clustering:
+        def __init__(self, bandwidth=None, sample_fraction=None, max_iter=300, 
+                     tol=1e-4, kernel='gaussian', alpha1=None, alpha2=None,
+                     adaptive_sampling=True, early_stop=True,
+                     step_scale=1.0, step_decay=0.75):
+            self.bandwidth = bandwidth
+            self.sample_fraction = sample_fraction
+            self.max_iter = max_iter
+            self.tol = tol
+            self.kernel = kernel
+            self.alpha1 = alpha1
+            self.alpha2 = alpha2
+            self.adaptive_sampling = adaptive_sampling
+            self.early_stop = early_stop
+            self.step_scale = step_scale
+            self.step_decay = step_decay
+            
+        def gaussian_kernel(self, x, xi, h):
+            diff = x - xi
+            return np.exp(-0.5 * np.sum(diff**2, axis=1) / (h**2))
+        
+        def compute_data_driven_bandwidth(self, X):
+            n_samples, n_features = X.shape
+            sample_std = np.std(X, axis=0).mean()
+            return sample_std * (n_samples**(-1.0 / (n_features + 4)))
+        
+        def compute_automatic_sample_fraction(self, X):
+            n_samples = X.shape[0]
+            if n_samples >= 10000:
+                return 0.005
+            else:
+                return min(0.02, 0.005 * np.sqrt(10000 / n_samples))
+        
+        def fit_predict(self, X):
+            X = np.array(X)
+            n_samples, n_features = X.shape
+            
+            if self.bandwidth is None:
+                self.bandwidth = self.compute_data_driven_bandwidth(X)
+            
+            if self.sample_fraction is None:
+                self.sample_fraction = self.compute_automatic_sample_fraction(X)
+            
+            modes = X.copy()
+            sample_size = max(1, int(self.sample_fraction * n_samples))
+            
+            for iteration in range(self.max_iter):
+                sample_indices = np.random.choice(n_samples, sample_size, replace=False)
+                sample_data = X[sample_indices]
+                
+                step_size = self.step_scale / (iteration + 1)**self.step_decay
+                
+                new_modes = np.zeros_like(modes)
+                max_shift = 0
+                
+                for i in range(n_samples):
+                    if len(sample_data) > 0:
+                        sq_dists = np.sum((sample_data - modes[i])**2, axis=1)
+                        weights = np.exp(-0.5 * sq_dists / (self.bandwidth**2))
+                        total_weight = np.sum(weights)
+                        
+                        if total_weight > 1e-10:
+                            weighted_mean = np.sum(weights.reshape(-1,1) * sample_data, axis=0) / total_weight
+                            gradient = weighted_mean - modes[i]
+                            new_modes[i] = modes[i] + step_size * gradient
+                            max_shift = max(max_shift, np.linalg.norm(gradient))
+                        else:
+                            new_modes[i] = modes[i]
+                    else:
+                        new_modes[i] = modes[i]
+                
+                modes = new_modes
+                
+                if max_shift < self.tol:
+                    break
+            
+            # Simple clustering assignment
+            labels = np.zeros(n_samples, dtype=int)
+            cluster_id = 0
+            distance_threshold = self.bandwidth / 2
+            
+            for i in range(n_samples):
+                if labels[i] == 0:  # Not assigned yet
+                    cluster_id += 1
+                    labels[i] = cluster_id
+                    
+                    # Assign nearby points to same cluster
+                    for j in range(i+1, n_samples):
+                        if labels[j] == 0:
+                            if np.linalg.norm(modes[i] - modes[j]) <= distance_threshold:
+                                labels[j] = cluster_id
+            
+            # Convert to 0-based indexing
+            labels = labels - 1
+            
+            # Get unique cluster centers
+            unique_labels = np.unique(labels)
+            centers = []
+            for label in unique_labels:
+                cluster_modes = modes[labels == label]
+                centers.append(np.mean(cluster_modes, axis=0))
+            
+            return labels, np.array(centers)
 
 # Page configuration
 st.set_page_config(
