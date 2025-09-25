@@ -8,7 +8,9 @@ import sys
 import os
 # Add src directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from sams_clustering import SAMS_Clustering, StandardMeanShift, generate_test_data
+from sams_clustering import SAMS_Clustering, generate_test_data
+from standard_meanshift import StandardMeanShift
+from sklearn.cluster import MeanShift
 
 def evaluate_clustering(labels_true, labels_pred):
     """Evaluate clustering performance"""
@@ -70,7 +72,7 @@ def run_corrected_experiment_1():
                     plot_clustering_result(X, labels_sams, config, sample_frac)
                 
                 # Standard Mean-Shift - use SAME bandwidth and SAME dataset
-                ms = StandardMeanShift(bandwidth=sams.bandwidth, max_iter=200, tol=1e-4)
+                ms = StandardMeanShift(bandwidth=sams.bandwidth, max_iter=200)
                 
                 start_time = time.time()
                 labels_ms, _ = ms.fit_predict(X)  # SAME dataset, SAME bandwidth

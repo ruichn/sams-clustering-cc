@@ -15,9 +15,10 @@ class SAMS_Clustering:
     - Proper stochastic approximation with vectorized computation
     """
     
-    def __init__(self, bandwidth=None, sample_fraction=0.01, max_iter=300, 
+    def __init__(self, bandwidth=None, sample_fraction=None, max_iter=300, 
                  tol=1e-4, kernel='gaussian', alpha1=None, alpha2=None,
-                 adaptive_sampling=True, early_stop=True):
+                 adaptive_sampling=True, early_stop=True,
+                 step_scale=1.0, step_decay=0.75):
         self.bandwidth = bandwidth
         self.sample_fraction = sample_fraction
         self.max_iter = max_iter
@@ -27,6 +28,10 @@ class SAMS_Clustering:
         self.alpha2 = alpha2
         self.adaptive_sampling = adaptive_sampling
         self.early_stop = early_stop
+        
+        # Step size parameters (Hyrien & Baran 2016, Section 2.5.4)
+        self.step_scale = step_scale    # αγ,0 - scale factor
+        self.step_decay = step_decay    # αγ,1 - decay exponent
         
     def gaussian_kernel(self, x, xi, h):
         """Optimized Gaussian kernel computation"""
@@ -65,35 +70,31 @@ class SAMS_Clustering:
         n_samples, n_features = X.shape
         
         if self.alpha1 is None:
-            sample_var = np.var(X, axis=0).mean()
-            self.alpha1 = (sample_var * n_samples)**(-1.0 / (n_features + 4))
+            """
+            Scott (1992)
+            """
+            sample_std = np.std(X, axis=0).mean()
+            self.alpha1 = sample_std * (n_samples**(-1.0 / (n_features + 4)))
         
         if self.alpha2 is None:
+            """
+            Breiman et al. (1977) 
+            """
             self.alpha2 = 1.0 / n_features
         
         # Dimension-aware pilot bandwidth for high-dimensional performance
-        base_pilot = 1.06 * np.std(X, axis=0).mean() * (n_samples**(-1.0/5))
-        
-        # Scale bandwidth for high dimensions to prevent over-clustering
-        if n_features <= 3:
-            h_pilot = base_pilot
-        elif n_features <= 10:
-            h_pilot = base_pilot * (1.0 + n_features / 20.0)
-        else:
-            # High dimensions: scale with sqrt of dimensionality
-            dimension_factor = np.sqrt(n_features / 3.0)
-            h_pilot = base_pilot * dimension_factor
-            
-            # Ensure minimum bandwidth for high-D data
-            min_bandwidth = 0.5 + (n_features - 10) * 0.02
-            h_pilot = max(h_pilot, min_bandwidth)
+        """
+        Silverman's rule of thumb referenced from MATLAB https://www.mathworks.com/help/stats/mvksdensity.html
+        """
+        A = min(np.std(X, axis=0).mean(), (np.percentile(X, 75) - np.percentile(X, 25))/1.34)
+        h_pilot = A * (4 / (n_samples * (n_features + 2))) ** (1.0 / (n_features + 4))
         
         # Efficient pilot density estimation (sample subset for speed)
         pilot_densities = np.zeros(n_samples)
         sample_step = max(1, n_samples // 100)  # Sample for performance
         
         for i in range(0, n_samples, sample_step):
-            weights = self.gaussian_kernel(X[i].reshape(1, -1), X, h_pilot)
+            weights = h_pilot ** (-n_features) * self.gaussian_kernel(X, X[i].reshape(1, -1), h_pilot)
             pilot_densities[i] = np.mean(weights)
         
         # Fill missing values
@@ -113,13 +114,51 @@ class SAMS_Clustering:
         
         return np.median(bandwidths)
     
+    def compute_automatic_sample_fraction(self, X):
+        """
+        Automatic sample fraction selection based on dataset size and paper recommendations.
+        Following Hyrien & Baran (2016) Section 2.5.2:
+        "sampled fractions ranging between 0.1% and 1% may be sufficient 
+         to run SAMS when n ≃ 10^5 and with clusters accounting for ≥1% of the data"
+        """
+        n_samples, n_features = X.shape
+        reference_size = 100000  # Paper's reference: n ≃ 10^5
+        
+        if n_samples >= reference_size:
+            # Large datasets: use paper's 0.1%-1% range (favor efficiency)
+            recommended_fraction = 0.005  # 0.5% - middle of 0.1%-1% range
+        else:
+            # Smaller datasets: scale up fractions to maintain statistical power
+            # Use sqrt scaling to balance efficiency and statistical power
+            scaling_factor = max(1.0, np.sqrt(reference_size / n_samples))
+            base_fraction = 0.005  # 0.5% base
+            recommended_fraction = min(0.02, base_fraction * scaling_factor)  # Cap at 2%
+        
+        # Additional adjustment for high-dimensional data
+        if n_features > 10:
+            # High-dimensional data may need slightly more samples
+            dimension_factor = min(2.0, 1.0 + (n_features - 10) / 50.0)
+            recommended_fraction = min(0.05, recommended_fraction * dimension_factor)  # Cap at 5%
+        
+        return recommended_fraction
+    
     def adaptive_sample_size(self, iteration, base_size, max_size):
-        """Adaptive sampling: start small, increase as convergence approaches"""
+        """
+        Adaptive sampling following Hyrien & Baran (2016) Section 2.5.2:
+        "decreasing the values of ρk after a few steps, once xk has moved away 
+        from the boundary of its modal region"
+        
+        Strategy: Start with higher sample fraction, decrease as algorithm converges
+        """
         if not self.adaptive_sampling:
             return base_size
         
-        progress = min(iteration / 50.0, 1.0)
-        return int(base_size + progress * (max_size - base_size))
+        # Start with higher sampling (max_size), decrease to base_size over ~20 iterations
+        # This follows the paper's guidance to decrease sample fractions after a few steps
+        decay_rate = min(iteration / 20.0, 1.0)  # Converge to smaller samples in ~20 steps
+        current_size = max_size - decay_rate * (max_size - base_size)
+        
+        return max(int(current_size), base_size)  # Ensure never goes below base_size
     
     def fit_predict(self, X):
         """
@@ -133,15 +172,49 @@ class SAMS_Clustering:
             self.bandwidth = self.compute_data_driven_bandwidth(X)
             print(f"Data-driven bandwidth selected: {self.bandwidth:.4f}")
         
+        # Compute sample fraction if automatic
+        if self.sample_fraction is None:
+            self.sample_fraction = self.compute_automatic_sample_fraction(X)
+            print(f"Automatic sample fraction selected: {self.sample_fraction*100:.2f}%")
+        
         # Initialize modes
         modes = X.copy()
         
-        # Adaptive sampling parameters
-        base_sample_size = max(1, int(self.sample_fraction * n_samples))
-        max_sample_size = min(n_samples, int(0.1 * n_samples))
-        
         print(f"Starting SAMS clustering with {n_samples} points")
-        print(f"Sample size range: {base_sample_size} to {max_sample_size}")
+        
+        if self.adaptive_sampling:
+            # Adaptive sampling parameters following paper's specific guidance:
+            # "sampled fractions ranging between 0.1% and 1% may be sufficient 
+            #  to run SAMS when n ≃ 10^5 and with clusters accounting for ≥1% of the data"
+            
+            # Scale recommendations based on dataset size relative to paper's n ≃ 10^5
+            reference_size = 100000  # Paper's reference: n ≃ 10^5
+            
+            # For smaller datasets, may need higher fractions; for larger, can use lower
+            if n_samples >= reference_size:
+                # Large datasets: use paper's 0.1%-1% range
+                min_fraction = 0.001  # 0.1%
+                max_fraction = 0.01   # 1.0%
+            else:
+                # Smaller datasets: scale up fractions to maintain statistical power
+                scaling_factor = max(1.0, np.sqrt(reference_size / n_samples))
+                min_fraction = min(0.005, 0.001 * scaling_factor)  # Cap at 0.5%
+                max_fraction = min(0.02, 0.01 * scaling_factor)   # Cap at 2.0%
+            
+            # Ensure user's sample_fraction falls within paper's recommended range
+            target_fraction = max(min_fraction, min(max_fraction, self.sample_fraction))
+            
+            base_sample_size = max(1, int(target_fraction * n_samples))  # Target final size
+            max_sample_size = max(base_sample_size, int(max_fraction * n_samples))  # Start higher
+            
+            print(f"Paper-compliant fractions: {min_fraction*100:.1f}%-{max_fraction*100:.1f}% (n≃{reference_size:,})")
+            print(f"Adaptive sampling: {target_fraction*100:.2f}% → {max_fraction*100:.2f}%")
+        else:
+            # Fixed sampling: use user's exact sample_fraction
+            base_sample_size = max(1, int(self.sample_fraction * n_samples))
+            max_sample_size = base_sample_size  # No variation
+            
+            print(f"Fixed sampling: {self.sample_fraction*100:.2f}% ({base_sample_size} points)")
         
         # Performance tracking
         convergence_window = []
@@ -154,8 +227,16 @@ class SAMS_Clustering:
             sample_indices = np.random.choice(n_samples, sample_size, replace=False)
             sample_data = X[sample_indices]
             
-            # Step size (original formula that works)
-            step_size = 1.0 / (iteration + 1)**0.6
+            # Step size (gain coefficient) following Hyrien & Baran (2016) Section 2.5.4:
+            # γk = αγ,0 / max(k - k0, 1)^αγ,1
+            # where:
+            #   - αγ,0 = step_scale (scale factor, default 1.0)
+            #   - αγ,1 = step_decay (decay exponent, default 0.75)
+            #   - k0 = 0 (iteration offset)
+            #   - k = iteration number (1-based)
+            #
+            # This ensures γk → 0 as k → ∞ (required for stochastic approximation convergence)
+            step_size = self.step_scale / (iteration + 1)**self.step_decay
             
             # Process modes in batches for memory efficiency
             new_modes = np.zeros_like(modes)
@@ -245,85 +326,6 @@ class SAMS_Clustering:
         
         return np.array(unique_modes)
 
-
-class StandardMeanShift:
-    """Standard Mean-Shift algorithm for comparison"""
-    
-    def __init__(self, bandwidth=1.0, max_iter=1000, tol=1e-4):
-        self.bandwidth = bandwidth
-        self.max_iter = max_iter
-        self.tol = tol
-    
-    def gaussian_kernel(self, x, xi, h):
-        """Gaussian kernel function"""
-        diff = x - xi
-        return np.exp(-0.5 * np.sum(diff**2, axis=1) / (h**2))
-    
-    def fit_predict(self, X):
-        """Standard mean-shift clustering"""
-        X = np.array(X)
-        n_samples, n_features = X.shape
-        modes = X.copy()
-        
-        print(f"Starting standard Mean-Shift with {n_samples} points")
-        
-        for iteration in range(self.max_iter):
-            new_modes = np.zeros_like(modes)
-            max_shift = 0
-            
-            for i in range(n_samples):
-                weights = self.gaussian_kernel(modes[i].reshape(1, -1), X, self.bandwidth)
-                
-                if np.sum(weights) > 0:
-                    weighted_points = X * weights.reshape(-1, 1)
-                    new_modes[i] = np.sum(weighted_points, axis=0) / np.sum(weights)
-                else:
-                    new_modes[i] = modes[i]
-                
-                shift = np.linalg.norm(new_modes[i] - modes[i])
-                max_shift = max(max_shift, shift)
-            
-            modes = new_modes
-            
-            if max_shift < self.tol:
-                print(f"Converged after {iteration + 1} iterations")
-                break
-        
-        # Simple clustering
-        labels = self._assign_clusters(modes)
-        unique_modes = self._get_unique_modes(modes, labels)
-        
-        return labels, unique_modes
-    
-    def _assign_clusters(self, modes, distance_threshold=None):
-        if distance_threshold is None:
-            distance_threshold = self.bandwidth / 2
-        
-        n_points = len(modes)
-        labels = np.full(n_points, -1)
-        cluster_id = 0
-        
-        for i in range(n_points):
-            if labels[i] == -1:
-                labels[i] = cluster_id
-                for j in range(i + 1, n_points):
-                    if labels[j] == -1:
-                        distance = np.linalg.norm(modes[i] - modes[j])
-                        if distance <= distance_threshold:
-                            labels[j] = cluster_id
-                cluster_id += 1
-        
-        return labels
-    
-    def _get_unique_modes(self, modes, labels):
-        unique_labels = np.unique(labels)
-        unique_modes = []
-        
-        for label in unique_labels:
-            cluster_modes = modes[labels == label]
-            unique_modes.append(np.mean(cluster_modes, axis=0))
-        
-        return np.array(unique_modes)
 
 
 def generate_test_data(n_samples=1000, dataset_type='blobs'):
