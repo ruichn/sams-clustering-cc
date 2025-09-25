@@ -9,6 +9,7 @@ on:
       - 'requirements.txt' 
       - 'README.md'
       - 'LICENSE'
+      - 'src/**'
 
 jobs:
   deploy:
@@ -40,13 +41,15 @@ jobs:
         run: |
           git clone https://chnrui:$HF_TOKEN@huggingface.co/spaces/chnrui/sams-clustering-demo hf-space
           
-          # Copy only demo files to HF space (exclude plots, src, docs)
+          # Copy demo files and src directory to HF space
           cp app.py hf-space/
           cp requirements.txt hf-space/
           cp LICENSE hf-space/
+          cp -r src/ hf-space/
           
-          # Explicitly do NOT copy plots, src, or docs directories
-          echo "ℹ️  Skipping plots/, src/, and docs/ directories (GitHub only)"
+          # Skip plots/ and docs/ directories (GitHub only)
+          echo "ℹ️  Skipping plots/ and docs/ directories (GitHub only)"
+          echo "✅ Copying src/ directory for SAMS algorithm"
           
           # Create HF-specific README with metadata
           cat > hf-space/README.md << 'EOF'
