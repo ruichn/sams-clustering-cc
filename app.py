@@ -14,9 +14,6 @@ from matplotlib.gridspec import GridSpec
 from mpl_toolkits.mplot3d import Axes3D
 # Removed Plotly imports - using matplotlib only
 # Import the main SAMS implementation
-import sys
-import os
-sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 from sams_clustering import SAMS_Clustering
 
 # Page configuration
