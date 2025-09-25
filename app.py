@@ -13,149 +13,16 @@ import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.mplot3d import Axes3D
 # Removed Plotly imports - using matplotlib only
-from scipy.spatial.distance import cdist
-# Removed dependency on external experiment module for Hugging Face deployment
-
-# Standalone SAMS implementation for demo
-class DemoSAMS:
-    """Simplified SAMS implementation for demo purposes"""
-    
-    def __init__(self, bandwidth=None, sample_fraction=0.01, max_iter=200, tol=1e-4):
-        self.bandwidth = bandwidth
-        self.sample_fraction = sample_fraction
-        self.max_iter = max_iter
-        self.tol = tol
-        
-    def gaussian_kernel(self, x, xi, h):
-        """Gaussian kernel function"""
-        diff = x - xi
-        return np.exp(-0.5 * np.sum(diff**2, axis=1) / (h**2))
-    
-    def compute_bandwidth(self, X):
-        """Dimension-aware bandwidth estimation for high-dimensional data"""
-        if self.bandwidth is None:
-            n_samples, n_features = X.shape
-            
-            # Standard Silverman's rule for low dimensions
-            base_bandwidth = 1.06 * np.std(X, axis=0).mean() * (n_samples**(-1.0/5))
-            
-            # Scale bandwidth for high dimensions to prevent over-clustering
-            if n_features <= 3:
-                # Low dimensions: use standard rule
-                self.bandwidth = base_bandwidth
-            elif n_features <= 10:
-                # Medium dimensions: slight scaling
-                self.bandwidth = base_bandwidth * (1.0 + n_features / 20.0)
-            else:
-                # High dimensions: more aggressive scaling
-                # Scale with sqrt of dimensionality to handle curse of dimensionality
-                dimension_factor = np.sqrt(n_features / 3.0)
-                self.bandwidth = base_bandwidth * dimension_factor
-                
-                # Ensure minimum bandwidth for high-D data
-                min_bandwidth = 0.5 + (n_features - 10) * 0.02
-                self.bandwidth = max(self.bandwidth, min_bandwidth)
-                
-        return self.bandwidth
-    
-    def vectorized_gradient_batch(self, modes_batch, sample_data, h):
-        """Vectorized gradient computation for performance"""
-        if len(sample_data) == 0:
-            return np.zeros_like(modes_batch)
-        
-        # Compute all pairwise distances at once
-        sq_dists = cdist(modes_batch, sample_data, metric='sqeuclidean')
-        weights = np.exp(-0.5 * sq_dists / (h**2))
-        
-        # Vectorized weighted means
-        total_weights = np.sum(weights, axis=1, keepdims=True)
-        total_weights = np.maximum(total_weights, 1e-10)
-        
-        # Weighted averages
-        weighted_means = np.dot(weights, sample_data) / total_weights
-        
-        # Mean-shift gradients
-        gradients = weighted_means - modes_batch
-        
-        return gradients
-    
-    def fit_predict(self, X):
-        """SAMS clustering implementation"""
-        X = np.array(X)
-        n_samples, n_features = X.shape
-        
-        # Compute bandwidth
-        self.bandwidth = self.compute_bandwidth(X)
-        
-        # Initialize modes
-        modes = X.copy()
-        sample_size = max(1, int(self.sample_fraction * n_samples))
-        
-        # SAMS iterations
-        for iteration in range(self.max_iter):
-            # Sample subset
-            sample_indices = np.random.choice(n_samples, sample_size, replace=False)
-            sample_data = X[sample_indices]
-            
-            # Step size
-            step_size = 1.0 / (iteration + 1)**0.6
-            
-            # Update modes using vectorized computation
-            gradients = self.vectorized_gradient_batch(modes, sample_data, self.bandwidth)
-            new_modes = modes + step_size * gradients
-            
-            # Check convergence
-            max_shift = np.max(np.linalg.norm(new_modes - modes, axis=1))
-            modes = new_modes
-            
-            if max_shift < self.tol:
-                break
-        
-        # Simple clustering assignment
-        labels = self._assign_clusters(modes)
-        centers = self._get_centers(modes, labels)
-        
-        return labels, centers
-    
-    def _assign_clusters(self, modes, distance_threshold=None):
-        """Assign points to clusters based on mode proximity"""
-        if distance_threshold is None:
-            distance_threshold = self.bandwidth / 2
-        
-        n_points = len(modes)
-        labels = np.full(n_points, -1)
-        cluster_id = 0
-        
-        for i in range(n_points):
-            if labels[i] == -1:
-                labels[i] = cluster_id
-                
-                # Find nearby modes
-                for j in range(i + 1, n_points):
-                    if labels[j] == -1:
-                        distance = np.linalg.norm(modes[i] - modes[j])
-                        if distance <= distance_threshold:
-                            labels[j] = cluster_id
-                
-                cluster_id += 1
-        
-        return labels
-    
-    def _get_centers(self, modes, labels):
-        """Get cluster centers"""
-        unique_labels = np.unique(labels)
-        centers = []
-        
-        for label in unique_labels:
-            cluster_modes = modes[labels == label]
-            centers.append(np.mean(cluster_modes, axis=0))
-        
-        return np.array(centers)
+# Import the main SAMS implementation
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
+from sams_clustering import SAMS_Clustering
 
 # Page configuration
 st.set_page_config(
     page_title="SAMS Clustering Demo",
-    page_icon="📊",
+    page_icon=None,
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -204,7 +71,7 @@ def main():
             else:  # Intensity + Gradient
                 feature_type = "intensity_gradient"
                 n_features = 2
-            st.info(f"🖼️ **Image Segmentation** - {n_features}D clustering with {feature_type.replace('_', ' ')} features")
+            st.info(f"**Image Segmentation** - {n_features}D clustering with {feature_type.replace('_', ' ')} features")
         else:
             n_features = st.slider(
                 "Number of Dimensions",
@@ -217,15 +84,15 @@ def main():
             
             # Display dimension info
             if n_features == 1:
-                st.info("📊 **1D Mode** - One-dimensional clustering")
+                st.info("**1D Mode** - One-dimensional clustering")
             elif n_features == 2:
-                st.info("📊 **2D Mode** - Standard two-dimensional clustering")
+                st.info("**2D Mode** - Standard two-dimensional clustering")
             elif n_features == 3:
-                st.info("🌐 **3D Mode** - Three-dimensional clustering with 3D visualization")
+                st.info("**3D Mode** - Three-dimensional clustering with 3D visualization")
             elif n_features <= 10:
-                st.info(f"📊 **{n_features}D Mode** - Multi-dimensional clustering")
+                st.info(f"**{n_features}D Mode** - Multi-dimensional clustering")
             else:
-                st.info(f"🔬 **{n_features}D High-Dimensional Mode** - Visualization will use PCA projection to 2D")
+                st.info(f"**{n_features}D High-Dimensional Mode** - Visualization will use PCA projection to 2D")
         
         # Map to internal dataset_type for compatibility with existing generate_dataset function
         if data_type == "Spheres":
@@ -313,19 +180,30 @@ def main():
         # SAMS parameters
         st.markdown("**SAMS Configuration:**")
         
-        # Adaptive parameter recommendations for high-dimensional data
-        if n_features >= 64:
-            recommended_sample_fraction = max(2.0, min(5.0, 2.0 + (n_features - 64) / 32.0))
-            st.info(f"💡 **High-D Recommendation**: Sample fraction ≥ {recommended_sample_fraction:.1f}% for {n_features}D data")
+        # Sample fraction selection (similar to bandwidth)
+        sample_fraction_mode = st.radio(
+            "Sample Fraction Selection", 
+            ["Automatic (Data-driven)", "Manual"],
+            help="Choose how to set the sample fraction. Automatic uses paper recommendations based on dataset size and dimensionality."
+        )
         
-        sample_fraction = st.slider(
-            "Sample Fraction (%)",
-            min_value=0.1,
-            max_value=100.0,
-            value=3.0 if n_features >= 64 else 2.0,
-            step=0.1,
-            help="Percentage of data points to sample at each iteration. Lower values enable processing of very large datasets. Higher values recommended for high-dimensional data. 100% = standard mean-shift."
-        ) / 100
+        if sample_fraction_mode == "Manual":
+            # Adaptive parameter recommendations for high-dimensional data
+            if n_features >= 64:
+                recommended_sample_fraction = max(2.0, min(5.0, 2.0 + (n_features - 64) / 32.0))
+                st.info(f"**High-D Recommendation**: Sample fraction ≥ {recommended_sample_fraction:.1f}% for {n_features}D data")
+            
+            sample_fraction = st.slider(
+                "Sample Fraction (%)",
+                min_value=0.1,
+                max_value=100.0,
+                value=3.0 if n_features >= 64 else 2.0,
+                step=0.1,
+                help="Percentage of data points to sample at each iteration. Lower values enable processing of very large datasets. Higher values recommended for high-dimensional data. 100% = standard mean-shift."
+            ) / 100
+        else:
+            sample_fraction = None  # Will be computed automatically
+            st.info("**Automatic mode**: Sample fraction will be selected based on dataset size and paper recommendations")
         
         bandwidth_mode = st.radio(
             "Bandwidth Selection",
@@ -353,6 +231,31 @@ def main():
             step=25,
             help="Maximum number of iterations"
         )
+        
+        # Step size parameters
+        st.markdown("**Step Size Configuration:**")
+        st.info("**Step size controls convergence behavior**: γk = Scale / (iteration)^Decay")
+        
+        col1_step, col2_step = st.columns(2)
+        with col1_step:
+            step_scale = st.number_input(
+                "Scale Factor (αγ,0)",
+                min_value=0.1,
+                max_value=5.0,
+                value=1.0,
+                step=0.1,
+                help="Scale factor for step size. Higher values = larger initial steps. Paper recommends 1.0."
+            )
+        
+        with col2_step:
+            step_decay = st.slider(
+                "Decay Exponent (αγ,1)",
+                min_value=0.51,
+                max_value=1.0,
+                value=0.75,
+                step=0.01,
+                help="Step size decay rate. Higher values = faster decay. Must be > 0.5 for convergence. Paper suggests 0.51-0.75."
+            )
         
         # Comparison options
         st.subheader("Comparison")
@@ -388,11 +291,13 @@ def main():
             run_clustering_experiment(dataset_type, n_samples, n_centers, noise_level,
                                     cluster_std if dataset_type == "Gaussian Blobs" else None,
                                     bandwidth, sample_fraction, max_iter, compare_sklearn, 
-                                    random_seed, col1, col2, n_features, extra_params)
+                                    random_seed, col1, col2, n_features, extra_params,
+                                    step_scale, step_decay)
 
 def run_clustering_experiment(dataset_type, n_samples, n_centers, noise_level, cluster_std,
                             bandwidth, sample_fraction, max_iter, compare_sklearn, 
-                            random_seed, col1, col2, n_features=2, extra_params=None):
+                            random_seed, col1, col2, n_features=2, extra_params=None,
+                            step_scale=1.0, step_decay=0.75):
     """Run the complete clustering experiment"""
     
     # Set random seed
@@ -418,7 +323,8 @@ def run_clustering_experiment(dataset_type, n_samples, n_centers, noise_level, c
     
     # SAMS clustering
     with st.spinner("Running SAMS clustering..."):
-        sams = DemoSAMS(bandwidth=bandwidth, sample_fraction=sample_fraction, max_iter=max_iter)
+        sams = SAMS_Clustering(bandwidth=bandwidth, sample_fraction=sample_fraction, max_iter=max_iter,
+                               step_scale=step_scale, step_decay=step_decay)
         
         start_time = time.time()
         labels_sams, centers_sams = sams.fit_predict(X)
@@ -819,64 +725,80 @@ def display_results(X, y_true, results, dataset_type, sample_fraction, col1, col
         sams_result = results.get('SAMS')
         sklearn_result = results.get('Scikit-Learn Mean-Shift')
         
-        if sams_result:
-            speedup_text = ""
-            if sklearn_result and sklearn_result['time'] > 0:
-                speedup = sklearn_result['time'] / sams_result['time']
-                speedup_text = f"\n\n**{speedup:.1f}x faster than sklearn**"
-            
-            # Enhanced metrics for high-dimensional data
-            high_d_metrics = ""
-            data_shape = X.shape if 'X' in locals() else (0, 0)
-            data_n_features = data_shape[1] if len(data_shape) > 1 else 2
-            data_n_samples = data_shape[0] if len(data_shape) > 0 else 1000
-            
-            if dataset_type == "High-Dimensional Blobs" and data_n_features > 10:
-                # Calculate dimensionality-adjusted performance
-                samples_per_dim = data_n_samples / data_n_features
-                runtime_per_dim = sams_result['time'] / data_n_features
-                high_d_metrics = f"\n\n**High-D Analysis:**\n📏 **Dimensionality:** {data_n_features}D\n📊 **Samples/Dimension:** {samples_per_dim:.1f}\n⚡ **Runtime/Dimension:** {runtime_per_dim:.4f}s"
-                
-                # Performance assessment
-                if sams_result['time'] < 1.0 and data_n_features >= 64:
-                    high_d_metrics += "\n✅ **Excellent high-D performance**"
-                elif sams_result['time'] < 2.0:
-                    high_d_metrics += "\n👍 **Good high-D performance**"
-            
-            st.success(f"""
-            **SAMS Performance**
-            
-            🔍 **Clusters:** {sams_result['n_clusters']}
-            
-            ⏱️ **Runtime:** {sams_result['time']:.3f}s
-            
-            🎛️ **Bandwidth:** {sams_result['bandwidth']:.4f}
-            {speedup_text}{high_d_metrics}
-            """)
+        # Create consistent vertical results display
+        # Common variables for both methods
+        data_shape = X.shape if 'X' in locals() else (0, 0)
+        data_n_features = data_shape[1] if len(data_shape) > 1 else 2
+        data_n_samples = data_shape[0] if len(data_shape) > 0 else 1000
         
-        if sklearn_result:
-            st.info(f"""
-            **Scikit-Learn Mean-Shift**
-            
-            🔍 **Clusters:** {sklearn_result['n_clusters']}
-            
-            ⏱️ **Runtime:** {sklearn_result['time']:.3f}s
-            
-            🎛️ **Bandwidth:** {sklearn_result['bandwidth']:.4f}
-            """)
-        
-        # Quality assessment
+        # SAMS Results
         if sams_result:
+            # Calculate quality metrics
+            ari_sams = None
+            quality_text_sams = ""
             try:
-                ari = adjusted_rand_score(y_true, sams_result['labels'])
-                if ari > 0.8:
-                    st.success(f"🎯 **Excellent clustering quality** (ARI: {ari:.3f})")
-                elif ari > 0.6:
-                    st.warning(f"🎯 **Good clustering quality** (ARI: {ari:.3f})")
-                else:
-                    st.error(f"🎯 **Poor clustering quality** (ARI: {ari:.3f})")
+                ari_sams = adjusted_rand_score(y_true, sams_result['labels'])
+                quality_text_sams = f"\n\n**Quality (ARI):** {ari_sams:.3f}"
             except:
                 pass
+            
+            # High-dimensional metrics for SAMS
+            high_d_metrics = ""
+            if dataset_type == "High-Dimensional Blobs" and data_n_features > 10:
+                samples_per_dim = data_n_samples / data_n_features
+                runtime_per_dim = sams_result['time'] / data_n_features
+                high_d_metrics = f"\n\n**Samples/Dimension:** {samples_per_dim:.1f}\n\n**Runtime/Dimension:** {runtime_per_dim:.4f}s"
+            
+            st.success(f"""**SAMS Algorithm**
+
+**Clusters:** {sams_result['n_clusters']}
+
+**Runtime:** {sams_result['time']:.3f}s
+
+**Bandwidth:** {sams_result['bandwidth']:.4f}{quality_text_sams}{high_d_metrics}""")
+        
+        # Scikit-Learn Results
+        if sklearn_result:
+            # Calculate quality metrics for sklearn
+            ari_sklearn = None
+            quality_text_sklearn = ""
+            try:
+                ari_sklearn = adjusted_rand_score(y_true, sklearn_result['labels'])
+                quality_text_sklearn = f"\n\n**Quality (ARI):** {ari_sklearn:.3f}"
+            except:
+                pass
+            
+            st.info(f"""**Scikit-Learn Mean-Shift**
+
+**Clusters:** {sklearn_result['n_clusters']}
+
+**Runtime:** {sklearn_result['time']:.3f}s
+
+**Bandwidth:** {sklearn_result['bandwidth']:.4f}{quality_text_sklearn}""")
+        
+        # Comparative analysis section
+        if sams_result and sklearn_result:
+            st.markdown("---")
+            
+            # Calculate speedup
+            speedup = sklearn_result['time'] / sams_result['time'] if sams_result['time'] > 0 else 0
+            
+            # Quality comparison
+            quality_comparison = ""
+            if ari_sams is not None and ari_sklearn is not None:
+                quality_diff = ari_sams - ari_sklearn
+                if abs(quality_diff) < 0.05:
+                    quality_comparison = "**Quality:** Similar performance"
+                elif quality_diff > 0:
+                    quality_comparison = f"**Quality:** SAMS better (+{quality_diff:.3f} ARI)"
+                else:
+                    quality_comparison = f"**Quality:** Mean-Shift better (+{abs(quality_diff):.3f} ARI)"
+            
+            st.info(f"""**Performance Comparison**
+
+**Speed:** SAMS is {speedup:.1f}x faster
+
+{quality_comparison}""")
 
 def create_clustering_plot(X, y_true, results):
     """Create clustering visualization with support for high-dimensional data using PCA"""
