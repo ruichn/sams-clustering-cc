@@ -15,17 +15,40 @@ from mpl_toolkits.mplot3d import Axes3D
 from scipy.spatial.distance import cdist
 
 # Removed Plotly imports - using matplotlib only
-# Import the main SAMS implementation with proper path handling
+# Import the main SAMS implementation with debugging and fallback
 import sys
 import os
 
-# Add src directory to Python path for both local and Hugging Face environments
+# Debug: Show current working directory and file location
 current_dir = os.path.dirname(os.path.abspath(__file__))
 src_path = os.path.join(current_dir, 'src')
+
+# Add src directory to Python path
 if src_path not in sys.path:
     sys.path.insert(0, src_path)
 
-from sams_clustering import SAMS_Clustering
+# Debug: Check if src directory and file exist
+src_exists = os.path.exists(src_path)
+sams_file = os.path.join(src_path, 'sams_clustering.py')
+sams_exists = os.path.exists(sams_file)
+
+try:
+    from sams_clustering import SAMS_Clustering
+except ImportError as e:
+    # Show debugging info to user
+    st.error(f"Import failed: {e}")
+    st.error(f"Current dir: {current_dir}")
+    st.error(f"Src path: {src_path}")
+    st.error(f"Src exists: {src_exists}")
+    st.error(f"SAMS file exists: {sams_exists}")
+    st.error(f"Python path: {sys.path[:5]}")  # Show first 5 entries
+    
+    if sams_exists:
+        st.error("File exists but import failed - likely a dependency issue")
+    else:
+        st.error("SAMS file not found - deployment issue")
+    
+    st.stop()
 
 # Page configuration
 st.set_page_config(
