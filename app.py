@@ -26,6 +26,7 @@ if src_path not in sys.path:
     sys.path.insert(0, src_path)
 
 from sams_clustering import SAMS_Clustering
+from standard_meanshift import StandardMeanShift
 
 # Page configuration
 st.set_page_config(
@@ -185,88 +186,199 @@ def main():
         
         st.subheader("Algorithm Parameters")
         
-        # SAMS parameters
-        st.markdown("**SAMS Configuration:**")
-        
-        # Sample fraction selection (similar to bandwidth)
-        sample_fraction_mode = st.radio(
-            "Sample Fraction Selection", 
-            ["Automatic (Data-driven)", "Manual"],
-            help="Choose how to set the sample fraction. Automatic uses paper recommendations based on dataset size and dimensionality."
-        )
-        
-        if sample_fraction_mode == "Manual":
-            # Adaptive parameter recommendations for high-dimensional data
-            if n_features >= 64:
-                recommended_sample_fraction = max(2.0, min(5.0, 2.0 + (n_features - 64) / 32.0))
-                st.info(f"**High-D Recommendation**: Sample fraction ≥ {recommended_sample_fraction:.1f}% for {n_features}D data")
+        # SAMS Parameters
+        with st.expander("🔬 SAMS Algorithm Parameters", expanded=True):
+            st.markdown("**SAMS (Stochastic Approximation Mean-Shift) Configuration**")
             
-            sample_fraction = st.slider(
-                "Sample Fraction (%)",
-                min_value=0.1,
-                max_value=100.0,
-                value=3.0 if n_features >= 64 else 2.0,
-                step=0.1,
-                help="Percentage of data points to sample at each iteration. Lower values enable processing of very large datasets. Higher values recommended for high-dimensional data. 100% = standard mean-shift."
-            ) / 100
-        else:
-            sample_fraction = None  # Will be computed automatically
-            st.info("**Automatic mode**: Sample fraction will be selected based on dataset size and paper recommendations")
-        
-        bandwidth_mode = st.radio(
-            "Bandwidth Selection",
-            ["Automatic (Silverman's rule)", "Manual"],
-            help="Choose how to set the bandwidth parameter"
-        )
-        
-        if bandwidth_mode == "Manual":
-            bandwidth = st.slider(
-                "Bandwidth",
-                min_value=0.1,
-                max_value=2.0,
-                value=0.5,
-                step=0.05,
-                help="Bandwidth parameter for kernel density estimation"
+            # Sample fraction selection
+            sample_fraction_mode = st.radio(
+                "Sample Fraction Selection", 
+                ["Automatic (Data-driven)", "Manual"],
+                help="Choose how to set the sample fraction. Automatic uses paper recommendations based on dataset size and dimensionality.",
+                key="sams_sample_fraction_mode"
             )
-        else:
-            bandwidth = None
+            
+            if sample_fraction_mode == "Manual":
+                # Adaptive parameter recommendations for high-dimensional data
+                if n_features >= 64:
+                    recommended_sample_fraction = max(2.0, min(5.0, 2.0 + (n_features - 64) / 32.0))
+                    st.info(f"**High-D Recommendation**: Sample fraction ≥ {recommended_sample_fraction:.1f}% for {n_features}D data")
+                
+                sample_fraction = st.slider(
+                    "Sample Fraction (%)",
+                    min_value=0.1,
+                    max_value=100.0,
+                    value=3.0 if n_features >= 64 else 2.0,
+                    step=0.1,
+                    help="Percentage of data points to sample at each iteration. Lower values enable processing of very large datasets. Higher values recommended for high-dimensional data. 100% = standard mean-shift.",
+                    key="sams_sample_fraction"
+                ) / 100
+            else:
+                sample_fraction = None  # Will be computed automatically
+                st.info("**Automatic mode**: Sample fraction will be selected based on dataset size and paper recommendations")
+            
+            # Bandwidth selection
+            sams_bandwidth_mode = st.radio(
+                "Bandwidth Selection",
+                ["Automatic (Silverman's rule)", "Manual"],
+                help="Choose how to set the bandwidth parameter for SAMS",
+                key="sams_bandwidth_mode"
+            )
+            
+            if sams_bandwidth_mode == "Manual":
+                sams_bandwidth = st.slider(
+                    "Bandwidth",
+                    min_value=0.1,
+                    max_value=2.0,
+                    value=0.5,
+                    step=0.05,
+                    help="Bandwidth parameter for kernel density estimation",
+                    key="sams_bandwidth"
+                )
+            else:
+                sams_bandwidth = None
+            
+            # Max iterations
+            sams_max_iter = st.slider(
+                "Max Iterations",
+                min_value=50,
+                max_value=5000,
+                value=150,
+                step=25,
+                help="Maximum number of iterations for SAMS",
+                key="sams_max_iter"
+            )
+            
+            # Advanced step size parameters
+            with st.expander("Advanced Step Size Parameters", expanded=False):
+                st.markdown("**Step Size Parameters for Bandwidth Calculation:**")
+                st.info("These step size parameters control the data-driven bandwidth computation. Leave as 'Automatic' unless you need fine-tuning.")
+                
+                alpha1_mode = st.radio(
+                    "Alpha1 (Scott's Rule Parameter)",
+                    ["Automatic", "Manual"],
+                    help="Alpha1 controls the base bandwidth scaling using Scott's rule",
+                    key="sams_alpha1_mode"
+                )
+                
+                if alpha1_mode == "Manual":
+                    alpha1 = st.slider(
+                        "Alpha1 Value",
+                        min_value=0.01,
+                        max_value=2.0,
+                        value=0.5,
+                        step=0.01,
+                        help="Manual alpha1 value for bandwidth computation",
+                        key="sams_alpha1"
+                    )
+                else:
+                    alpha1 = None
+                
+                alpha2_mode = st.radio(
+                    "Alpha2 (Dimension Factor)",
+                    ["Automatic", "Manual"],
+                    help="Alpha2 controls dimension-dependent bandwidth adjustment",
+                    key="sams_alpha2_mode"
+                )
+                
+                if alpha2_mode == "Manual":
+                    alpha2 = st.slider(
+                        "Alpha2 Value",
+                        min_value=0.1,
+                        max_value=2.0,
+                        value=1.0,
+                        step=0.1,
+                        help="Manual alpha2 value for dimension adjustment",
+                        key="sams_alpha2"
+                    )
+                else:
+                    alpha2 = None
         
-        max_iter = st.slider(
-            "Max Iterations",
-            min_value=50,
-            max_value=5000,
-            value=150,
-            step=25,
-            help="Maximum number of iterations"
-        )
-        
-        # Step size parameters
-        st.markdown("**Step Size Configuration:**")
-        st.info("**Step size controls convergence behavior**: γk = Scale / (iteration)^Decay")
-        
-        col1_step, col2_step = st.columns(2)
-        with col1_step:
-            step_scale = st.number_input(
-                "Scale Factor (αγ,0)",
-                min_value=0.1,
-                max_value=5.0,
-                value=1.0,
-                step=0.1,
-                help="Scale factor for step size. Higher values = larger initial steps. Paper recommends 1.0."
+        # Standard Mean-Shift Parameters
+        with st.expander("📊 Standard Mean-Shift Parameters", expanded=False):
+            st.markdown("**Standard Mean-Shift Configuration**")
+            
+            standard_bandwidth_mode = st.radio(
+                "Bandwidth Selection",
+                ["Use SAMS Bandwidth", "Automatic (Silverman's rule)", "Manual"],
+                help="Choose how to set the bandwidth parameter for Standard Mean-Shift",
+                key="standard_bandwidth_mode"
+            )
+            
+            if standard_bandwidth_mode == "Manual":
+                standard_bandwidth = st.slider(
+                    "Bandwidth",
+                    min_value=0.1,
+                    max_value=2.0,
+                    value=0.5,
+                    step=0.05,
+                    help="Bandwidth parameter for Standard Mean-Shift",
+                    key="standard_bandwidth"
+                )
+            elif standard_bandwidth_mode == "Use SAMS Bandwidth":
+                standard_bandwidth = sams_bandwidth  # Use same as SAMS
+                st.info("Will use the same bandwidth as SAMS for fair comparison")
+            else:
+                standard_bandwidth = None
+            
+            standard_max_iter = st.slider(
+                "Max Iterations",
+                min_value=50,
+                max_value=5000,
+                value=150,
+                step=25,
+                help="Maximum number of iterations for Standard Mean-Shift",
+                key="standard_max_iter"
             )
         
-        with col2_step:
-            step_decay = st.slider(
-                "Decay Exponent (αγ,1)",
-                min_value=0.51,
-                max_value=1.0,
-                value=0.75,
-                step=0.01,
-                help="Step size decay rate. Higher values = faster decay. Must be > 0.5 for convergence. Paper suggests 0.51-0.75."
+        # Scikit-Learn Mean-Shift Parameters
+        with st.expander("🔧 Scikit-Learn Mean-Shift Parameters", expanded=False):
+            st.markdown("**Scikit-Learn Mean-Shift Configuration**")
+            
+            sklearn_bandwidth_mode = st.radio(
+                "Bandwidth Selection",
+                ["Use SAMS Bandwidth", "Automatic (estimate_bandwidth)", "Manual"],
+                help="Choose how to set the bandwidth parameter for Scikit-Learn Mean-Shift",
+                key="sklearn_bandwidth_mode"
             )
+            
+            if sklearn_bandwidth_mode == "Manual":
+                sklearn_bandwidth = st.slider(
+                    "Bandwidth",
+                    min_value=0.1,
+                    max_value=2.0,
+                    value=0.5,
+                    step=0.05,
+                    help="Bandwidth parameter for Scikit-Learn Mean-Shift",
+                    key="sklearn_bandwidth"
+                )
+            elif sklearn_bandwidth_mode == "Use SAMS Bandwidth":
+                sklearn_bandwidth = sams_bandwidth  # Use same as SAMS
+                st.info("Will use the same bandwidth as SAMS for fair comparison")
+            else:
+                sklearn_bandwidth = None
+            
+            sklearn_max_iter = st.slider(
+                "Max Iterations",
+                min_value=50,
+                max_value=5000,
+                value=300,
+                step=25,
+                help="Maximum number of iterations for Scikit-Learn Mean-Shift",
+                key="sklearn_max_iter"
+            )
+        
+        # Set unified parameters for compatibility
+        bandwidth = sams_bandwidth  # Use SAMS bandwidth as the primary
+        max_iter = sams_max_iter    # Use SAMS max_iter as the primary
         
         # Comparison options
         st.subheader("Comparison")
+        compare_standard = st.checkbox(
+            "Include Standard Mean-Shift",
+            value=True,
+            help="Compare with our StandardMeanShift implementation"
+        )
         compare_sklearn = st.checkbox(
             "Include Scikit-Learn Mean-Shift",
             value=True,
@@ -282,30 +394,31 @@ def main():
             help="Seed for reproducible results"
         )
     
-    # Main content area
-    col1, col2 = st.columns([2, 1])
+    # Main content area - full width
+    st.subheader("Clustering Results")
     
-    with col1:
-        st.subheader("Clustering Results")
+    # Generate data button
+    if st.button("🔄 Generate Data & Run Clustering", type="primary"):
+        # Pass additional parameters for image segmentation
+        extra_params = {}
+        if dataset_type == "Image Segmentation":
+            extra_params['feature_type'] = feature_type
+            extra_params['image_size'] = (img_height, img_width)
         
-        # Generate data button
-        if st.button("🔄 Generate Data & Run Clustering", type="primary"):
-            # Pass additional parameters for image segmentation
-            extra_params = {}
-            if dataset_type == "Image Segmentation":
-                extra_params['feature_type'] = feature_type
-                extra_params['image_size'] = (img_height, img_width)
-            
-            run_clustering_experiment(dataset_type, n_samples, n_centers, noise_level,
-                                    cluster_std if dataset_type == "Gaussian Blobs" else None,
-                                    bandwidth, sample_fraction, max_iter, compare_sklearn, 
-                                    random_seed, col1, col2, n_features, extra_params,
-                                    step_scale, step_decay)
+        run_clustering_experiment(dataset_type, n_samples, n_centers, noise_level,
+                                cluster_std if dataset_type == "Gaussian Blobs" else None,
+                                sams_bandwidth, sample_fraction, sams_max_iter, 
+                                standard_bandwidth, standard_max_iter,
+                                sklearn_bandwidth, sklearn_max_iter,
+                                compare_standard, compare_sklearn, 
+                                random_seed, n_features, extra_params, alpha1, alpha2)
 
 def run_clustering_experiment(dataset_type, n_samples, n_centers, noise_level, cluster_std,
-                            bandwidth, sample_fraction, max_iter, compare_sklearn, 
-                            random_seed, col1, col2, n_features=2, extra_params=None,
-                            step_scale=1.0, step_decay=0.75):
+                            sams_bandwidth, sample_fraction, sams_max_iter,
+                            standard_bandwidth, standard_max_iter,
+                            sklearn_bandwidth, sklearn_max_iter,
+                            compare_standard, compare_sklearn, 
+                            random_seed, n_features=2, extra_params=None, alpha1=None, alpha2=None):
     """Run the complete clustering experiment"""
     
     # Set random seed
@@ -331,8 +444,7 @@ def run_clustering_experiment(dataset_type, n_samples, n_centers, noise_level, c
     
     # SAMS clustering
     with st.spinner("Running SAMS clustering..."):
-        sams = SAMS_Clustering(bandwidth=bandwidth, sample_fraction=sample_fraction, max_iter=max_iter,
-                               step_scale=step_scale, step_decay=step_decay)
+        sams = SAMS_Clustering(bandwidth=sams_bandwidth, sample_fraction=sample_fraction, max_iter=sams_max_iter, alpha1=alpha1, alpha2=alpha2)
         
         start_time = time.time()
         labels_sams, centers_sams = sams.fit_predict(X)
@@ -346,27 +458,47 @@ def run_clustering_experiment(dataset_type, n_samples, n_centers, noise_level, c
             'n_clusters': len(np.unique(labels_sams))
         }
     
+    # Standard Mean-Shift (if requested)
+    if compare_standard:
+        with st.spinner("Running Standard Mean-Shift..."):
+            try:
+                standard_ms = StandardMeanShift(bandwidth=standard_bandwidth, max_iter=standard_max_iter)
+                
+                start_time = time.time()
+                standard_labels, standard_centers = standard_ms.fit_predict(X)
+                standard_time = time.time() - start_time
+                
+                results['Standard Mean-Shift'] = {
+                    'labels': standard_labels,
+                    'centers': standard_centers,
+                    'time': standard_time,
+                    'bandwidth': standard_ms.bandwidth,
+                    'n_clusters': len(np.unique(standard_labels))
+                }
+            except Exception as e:
+                st.warning(f"Standard Mean-Shift failed: {str(e)}")
+    
     # Scikit-learn Mean-Shift (if requested)
     if compare_sklearn:
         with st.spinner("Running Scikit-Learn Mean-Shift..."):
             try:
-                if bandwidth is None:
+                if sklearn_bandwidth is None:
                     # Let MeanShift use its own bandwidth estimation (estimate_bandwidth)
-                    ms = MeanShift(bandwidth=None, max_iter=max_iter)
+                    ms = MeanShift(bandwidth=None, max_iter=sklearn_max_iter)
                 else:
-                    # Use user-specified bandwidth for both algorithms
-                    ms = MeanShift(bandwidth=bandwidth, max_iter=max_iter)
+                    # Use user-specified bandwidth for sklearn
+                    ms = MeanShift(bandwidth=sklearn_bandwidth, max_iter=sklearn_max_iter)
                 
                 start_time = time.time()
                 labels_ms = ms.fit_predict(X)
                 ms_time = time.time() - start_time
                 
                 # Get the actual bandwidth used by MeanShift
-                if bandwidth is None:
+                if sklearn_bandwidth is None:
                     # MeanShift used internal estimate_bandwidth()
                     actual_bandwidth = estimate_bandwidth(X)
                 else:
-                    actual_bandwidth = bandwidth
+                    actual_bandwidth = sklearn_bandwidth
                 
                 results['Scikit-Learn Mean-Shift'] = {
                     'labels': labels_ms,
@@ -379,7 +511,7 @@ def run_clustering_experiment(dataset_type, n_samples, n_centers, noise_level, c
                 st.warning(f"Scikit-Learn Mean-Shift failed: {str(e)}")
     
     # Display results
-    display_results(X, y_true, results, dataset_type, sample_fraction, col1, col2, original_image)
+    display_results(X, y_true, results, dataset_type, sample_fraction, original_image)
 
 def generate_synthetic_image(size=(60, 60), n_regions=4, noise_level=0.05):
     """Generate synthetic image for segmentation testing"""
@@ -683,137 +815,82 @@ def generate_dataset(dataset_type, n_samples, n_centers, noise_level, cluster_st
     
     return X, y_true.astype(int)
 
-def display_results(X, y_true, results, dataset_type, sample_fraction, col1, col2, original_image=None):
+def display_results(X, y_true, results, dataset_type, sample_fraction, original_image=None):
     """Display clustering results and comparisons"""
     
-    with col1:
-        # Special handling for image segmentation
-        if dataset_type == "Image Segmentation" and original_image is not None:
-            st.subheader("Original Image")
-            fig, ax = plt.subplots(figsize=(6, 6))
-            ax.imshow(original_image, cmap='gray')
-            ax.set_title("Synthetic Image for Segmentation")
-            ax.axis('off')
-            st.pyplot(fig)
-            plt.close(fig)
-        
-        # Side-by-side comparison (removed individual plots to avoid duplication)
-        st.subheader("Clustering Results Comparison")
-        fig = create_clustering_plot(X, y_true, results)
+    # Special handling for image segmentation
+    if dataset_type == "Image Segmentation" and original_image is not None:
+        st.subheader("Original Image")
+        fig, ax = plt.subplots(figsize=(6, 6))
+        ax.imshow(original_image, cmap='gray')
+        ax.set_title("Synthetic Image for Segmentation")
+        ax.axis('off')
         st.pyplot(fig)
+        plt.close(fig)
+    
+    # Main clustering visualization
+    st.subheader("Clustering Results Comparison")
+    fig = create_clustering_plot(X, y_true, results)
+    st.pyplot(fig)
+    
+    # Performance metrics table
+    st.subheader("Performance Metrics")
+    metrics_df = calculate_metrics(X, y_true, results)
+    st.dataframe(metrics_df, use_container_width=True)
+    
+    # Bottom section: Runtime comparison with experiment summary and performance comparison
+    if len(results) > 1:
+        st.subheader("Runtime Comparison")
         
-        # Performance metrics
-        st.subheader("Performance Metrics")
-        metrics_df = calculate_metrics(X, y_true, results)
-        st.dataframe(metrics_df, use_container_width=True)
+        # Create three columns for the bottom section
+        bottom_col1, bottom_col2, bottom_col3 = st.columns([1, 1, 2])
         
-        # Runtime comparison if multiple methods
-        if len(results) > 1:
-            st.subheader("Runtime Comparison")
+        with bottom_col1:
+            st.markdown("**Experiment Summary**")
+            st.info(f"""
+            **Dataset:** {dataset_type}
+            
+            **Size:** {len(X):,} points
+            
+            **True Clusters:** {len(np.unique(y_true))}
+            
+            **Features:** {X.shape[1]}D
+            """)
+        
+        with bottom_col2:
+            st.markdown("**Performance Comparison**")
+            sams_result = results.get('SAMS')
+            standard_result = results.get('Standard Mean-Shift')
+            sklearn_result = results.get('Scikit-Learn Mean-Shift')
+            
+            if sams_result and (standard_result or sklearn_result):
+                # Calculate speedups
+                if standard_result:
+                    speedup_standard = standard_result['time'] / sams_result['time'] if sams_result['time'] > 0 else 0
+                    st.info(f"**SAMS vs Standard:**\n{speedup_standard:.1f}x faster")
+                
+                if sklearn_result:
+                    speedup_sklearn = sklearn_result['time'] / sams_result['time'] if sams_result['time'] > 0 else 0
+                    st.info(f"**SAMS vs Sklearn:**\n{speedup_sklearn:.1f}x faster")
+        
+        with bottom_col3:
+            st.markdown("**Runtime Chart**")
             fig = create_runtime_plot(results)
             st.pyplot(fig)
-    
-    with col2:
-        st.subheader("Experiment Summary")
-        
-        # Dataset information
-        st.info(f"""
-        **Dataset:** {dataset_type}
-        
-        **Size:** {len(X):,} points
-        
-        **True Clusters:** {len(np.unique(y_true))}
-        
-        **Features:** {X.shape[1]}D
-        """)
-        
-        # Method comparison
-        st.subheader("Results Summary")
-        
-        sams_result = results.get('SAMS')
-        sklearn_result = results.get('Scikit-Learn Mean-Shift')
-        
-        # Create consistent vertical results display
-        # Common variables for both methods
-        data_shape = X.shape if 'X' in locals() else (0, 0)
-        data_n_features = data_shape[1] if len(data_shape) > 1 else 2
-        data_n_samples = data_shape[0] if len(data_shape) > 0 else 1000
-        
-        # SAMS Results
-        if sams_result:
-            # Calculate quality metrics
-            ari_sams = None
-            quality_text_sams = ""
-            try:
-                ari_sams = adjusted_rand_score(y_true, sams_result['labels'])
-                quality_text_sams = f"\n\n**Quality (ARI):** {ari_sams:.3f}"
-            except:
-                pass
             
-            # High-dimensional metrics for SAMS
-            high_d_metrics = ""
-            if dataset_type == "High-Dimensional Blobs" and data_n_features > 10:
-                samples_per_dim = data_n_samples / data_n_features
-                runtime_per_dim = sams_result['time'] / data_n_features
-                high_d_metrics = f"\n\n**Samples/Dimension:** {samples_per_dim:.1f}\n\n**Runtime/Dimension:** {runtime_per_dim:.4f}s"
-            
-            st.success(f"""**SAMS Algorithm**
-
-**Clusters:** {sams_result['n_clusters']}
-
-**Runtime:** {sams_result['time']:.3f}s
-
-**Bandwidth:** {sams_result['bandwidth']:.4f}{quality_text_sams}{high_d_metrics}""")
-        
-        # Scikit-Learn Results
-        if sklearn_result:
-            # Calculate quality metrics for sklearn
-            ari_sklearn = None
-            quality_text_sklearn = ""
-            try:
-                ari_sklearn = adjusted_rand_score(y_true, sklearn_result['labels'])
-                quality_text_sklearn = f"\n\n**Quality (ARI):** {ari_sklearn:.3f}"
-            except:
-                pass
-            
-            st.info(f"""**Scikit-Learn Mean-Shift**
-
-**Clusters:** {sklearn_result['n_clusters']}
-
-**Runtime:** {sklearn_result['time']:.3f}s
-
-**Bandwidth:** {sklearn_result['bandwidth']:.4f}{quality_text_sklearn}""")
-        
-        # Comparative analysis section
-        if sams_result and sklearn_result:
-            st.markdown("---")
-            
-            # Calculate speedup
-            speedup = sklearn_result['time'] / sams_result['time'] if sams_result['time'] > 0 else 0
-            
-            # Quality comparison
-            quality_comparison = ""
-            if ari_sams is not None and ari_sklearn is not None:
-                quality_diff = ari_sams - ari_sklearn
-                if abs(quality_diff) < 0.05:
-                    quality_comparison = "**Quality:** Similar performance"
-                elif quality_diff > 0:
-                    quality_comparison = f"**Quality:** SAMS better (+{quality_diff:.3f} ARI)"
-                else:
-                    quality_comparison = f"**Quality:** Mean-Shift better (+{abs(quality_diff):.3f} ARI)"
-            
-            st.info(f"""**Performance Comparison**
-
-**Speed:** SAMS is {speedup:.1f}x faster
-
-{quality_comparison}""")
 
 def create_clustering_plot(X, y_true, results):
     """Create clustering visualization with support for high-dimensional data using PCA"""
     
     n_methods = len(results) + 1  # +1 for true clusters
-    n_cols = min(3, n_methods)
-    n_rows = (n_methods + n_cols - 1) // n_cols
+    
+    # Layout: prefer 1x4 if fits, otherwise 2x2
+    if n_methods <= 4:
+        n_cols = n_methods  # 1x4 or 1x3 or 1x2
+        n_rows = 1
+    else:
+        n_cols = 2  # 2x2 for more than 4 methods
+        n_rows = (n_methods + n_cols - 1) // n_cols
     
     is_1d = X.shape[1] == 1
     is_2d = X.shape[1] == 2
@@ -829,8 +906,15 @@ def create_clustering_plot(X, y_true, results):
         explained_var = pca.explained_variance_ratio_[:2].sum()
         pca_info = f" (PCA: {explained_var:.1%} variance explained)"
     
-    fig_height = 8 if is_3d else 6
-    fig = plt.figure(figsize=(12, fig_height * n_rows))
+    # Adjust figure size based on layout
+    if n_rows == 1:  # 1x4 layout
+        fig_width = 4 * n_cols  # Scale width with number of columns
+        fig_height = 8 if is_3d else 6
+    else:  # 2x2 or other layouts
+        fig_width = 12
+        fig_height = (8 if is_3d else 6) * n_rows
+    
+    fig = plt.figure(figsize=(fig_width, fig_height))
     
     # Plot True clusters
     if is_3d and not is_high_d:

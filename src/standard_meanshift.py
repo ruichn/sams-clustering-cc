@@ -125,26 +125,30 @@ class StandardMeanShift:
         
         # Mean-shift iterations
         for iteration in range(self.max_iter):
-            new_modes = np.zeros_like(modes)
-            max_shift = 0
+            # Vectorized mode update - compute all modes simultaneously
+            # Compute pairwise distances: modes vs data points
+            # modes: (n_samples, n_features), X: (n_samples, n_features)
+            # Result: (n_samples, n_samples) where [i,j] = distance from mode_i to point_j
             
-            # Update each mode (this is the O(n²) part)
-            for i in range(n_samples):
-                # Compute kernel weights for mode i against all data points
-                weights = self.gaussian_kernel(modes[i].reshape(1, -1), X, self.bandwidth)
-                
-                # Weighted mean shift update
-                if np.sum(weights) > 0:
-                    # New mode position = weighted average of all points
-                    weighted_points = X * weights.reshape(-1, 1)
-                    new_modes[i] = np.sum(weighted_points, axis=0) / np.sum(weights)
-                else:
-                    # No nearby points - mode stays in place
-                    new_modes[i] = modes[i]
-                
-                # Track maximum shift for convergence
-                shift = np.linalg.norm(new_modes[i] - modes[i])
-                max_shift = max(max_shift, shift)
+            diffs = modes[:, None, :] - X[None, :, :]  # Shape: (n_modes, n_points, n_features)
+            sq_dists = np.sum(diffs**2, axis=2)        # Shape: (n_modes, n_points)
+            
+            # Gaussian kernel weights for all mode-point pairs
+            weights = np.exp(-0.5 * sq_dists / (self.bandwidth**2))  # Shape: (n_modes, n_points)
+            
+            # Weighted mean shift update for all modes simultaneously
+            weight_sums = np.sum(weights, axis=1, keepdims=True)  # Shape: (n_modes, 1)
+            weight_sums = np.maximum(weight_sums, 1e-10)  # Avoid division by zero
+            
+            # Compute weighted averages: weights @ X for each mode
+            # weights: (n_modes, n_points), X: (n_points, n_features)
+            # Result: (n_modes, n_features)
+            weighted_sums = np.sum(weights[:, :, None] * X[None, :, :], axis=1)  # (n_modes, n_features)
+            new_modes = weighted_sums / weight_sums  # (n_modes, n_features)
+            
+            # Track maximum shift for convergence
+            shifts = np.linalg.norm(new_modes - modes, axis=1)  # (n_modes,)
+            max_shift = np.max(shifts)
             
             modes = new_modes
             
@@ -172,19 +176,33 @@ class StandardMeanShift:
             distance_threshold = self.bandwidth / 2
         
         n_points = len(modes)
+        
+        # Vectorized distance computation - all pairwise distances at once
+        # modes: (n_points, n_features)
+        diffs = modes[:, None, :] - modes[None, :, :]  # Shape: (n_points, n_points, n_features)
+        distances = np.linalg.norm(diffs, axis=2)      # Shape: (n_points, n_points)
+        
+        # Create adjacency matrix for clustering
+        # Points are connected if distance <= threshold
+        adjacency = distances <= distance_threshold
+        
+        # Assign cluster labels using connected components
         labels = np.full(n_points, -1)
         cluster_id = 0
         
         for i in range(n_points):
             if labels[i] == -1:
+                # Find all points connected to point i (breadth-first search)
+                stack = [i]
                 labels[i] = cluster_id
                 
-                # Find nearby modes and assign to same cluster
-                for j in range(i + 1, n_points):
-                    if labels[j] == -1:
-                        distance = np.linalg.norm(modes[i] - modes[j])
-                        if distance <= distance_threshold:
-                            labels[j] = cluster_id
+                while stack:
+                    current = stack.pop()
+                    # Find all unvisited neighbors
+                    neighbors = np.where((adjacency[current]) & (labels == -1))[0]
+                    for neighbor in neighbors:
+                        labels[neighbor] = cluster_id
+                        stack.append(neighbor)
                 
                 cluster_id += 1
         
