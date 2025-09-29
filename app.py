@@ -249,50 +249,50 @@ def main():
                 key="sams_max_iter"
             )
             
-            # Advanced step size parameters
-            with st.expander("Advanced Step Size Parameters", expanded=False):
-                st.markdown("**Step Size Parameters for Bandwidth Calculation:**")
-                st.info("These step size parameters control the data-driven bandwidth computation. Leave as 'Automatic' unless you need fine-tuning.")
-                
-                alpha1_mode = st.radio(
-                    "Alpha1 (Scott's Rule Parameter)",
-                    ["Automatic", "Manual"],
-                    help="Alpha1 controls the base bandwidth scaling using Scott's rule",
-                    key="sams_alpha1_mode"
+            # Advanced step size parameters (no nested expander)
+            st.markdown("---")
+            st.markdown("**Advanced Step Size Parameters:**")
+            st.info("These step size parameters control the data-driven bandwidth computation. Leave as 'Automatic' unless you need fine-tuning.")
+            
+            alpha1_mode = st.radio(
+                "Alpha1 (Scott's Rule Parameter)",
+                ["Automatic", "Manual"],
+                help="Alpha1 controls the base bandwidth scaling using Scott's rule",
+                key="sams_alpha1_mode"
+            )
+            
+            if alpha1_mode == "Manual":
+                alpha1 = st.slider(
+                    "Alpha1 Value",
+                    min_value=0.01,
+                    max_value=2.0,
+                    value=0.5,
+                    step=0.01,
+                    help="Manual alpha1 value for bandwidth computation",
+                    key="sams_alpha1"
                 )
-                
-                if alpha1_mode == "Manual":
-                    alpha1 = st.slider(
-                        "Alpha1 Value",
-                        min_value=0.01,
-                        max_value=2.0,
-                        value=0.5,
-                        step=0.01,
-                        help="Manual alpha1 value for bandwidth computation",
-                        key="sams_alpha1"
-                    )
-                else:
-                    alpha1 = None
-                
-                alpha2_mode = st.radio(
-                    "Alpha2 (Dimension Factor)",
-                    ["Automatic", "Manual"],
-                    help="Alpha2 controls dimension-dependent bandwidth adjustment",
-                    key="sams_alpha2_mode"
+            else:
+                alpha1 = None
+            
+            alpha2_mode = st.radio(
+                "Alpha2 (Dimension Factor)",
+                ["Automatic", "Manual"],
+                help="Alpha2 controls dimension-dependent bandwidth adjustment",
+                key="sams_alpha2_mode"
+            )
+            
+            if alpha2_mode == "Manual":
+                alpha2 = st.slider(
+                    "Alpha2 Value",
+                    min_value=0.1,
+                    max_value=2.0,
+                    value=1.0,
+                    step=0.1,
+                    help="Manual alpha2 value for dimension adjustment",
+                    key="sams_alpha2"
                 )
-                
-                if alpha2_mode == "Manual":
-                    alpha2 = st.slider(
-                        "Alpha2 Value",
-                        min_value=0.1,
-                        max_value=2.0,
-                        value=1.0,
-                        step=0.1,
-                        help="Manual alpha2 value for dimension adjustment",
-                        key="sams_alpha2"
-                    )
-                else:
-                    alpha2 = None
+            else:
+                alpha2 = None
         
         # Standard Mean-Shift Parameters
         with st.expander("📊 Standard Mean-Shift Parameters", expanded=False):
