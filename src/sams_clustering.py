@@ -38,7 +38,7 @@ class SAMS_Clustering:
     
     def __init__(self, bandwidth=None, sample_fraction=None, max_iter=300, 
                  tol=1e-4, kernel='gaussian', alpha1=None, alpha2=None,
-                 adaptive_sampling=True, early_stop=True):
+                 adaptive_sampling=True, early_stop=True, adaptive_bandwidth=True):
         self.bandwidth = bandwidth
         self.sample_fraction = sample_fraction
         self.max_iter = max_iter
@@ -48,30 +48,12 @@ class SAMS_Clustering:
         self.alpha2 = alpha2
         self.adaptive_sampling = adaptive_sampling
         self.early_stop = early_stop
+        self.adaptive_bandwidth = adaptive_bandwidth
         
     def gaussian_kernel(self, x, xi, h):
         """Optimized Gaussian kernel computation"""
         diff = x - xi
         return np.exp(-0.5 * np.sum(diff**2, axis=1) / (h**2))
-    
-    def mean_shift_step(self, mode, sample_data, h):
-        """
-        Standard mean-shift step using subsample (for SAMS stochastic approximation)
-        This replicates the standard mean-shift update but with a subsample
-        """
-        if len(sample_data) == 0:
-            return mode
-        
-        # Compute kernel weights for mode against sample points
-        weights = self.gaussian_kernel(mode.reshape(1, -1), sample_data, h)
-        
-        # Weighted mean shift update (standard mean-shift formula)
-        if np.sum(weights) > 0:
-            weighted_points = sample_data * weights.reshape(-1, 1)
-            new_mode = np.sum(weighted_points, axis=0) / np.sum(weights)
-            return new_mode
-        else:
-            return mode
     
     def _vectorized_mean_shift_update(self, modes, sample_data, h):
         """
@@ -103,13 +85,13 @@ class SAMS_Clustering:
             # Shape: (batch_size, n_samples, dim)
             diffs = batch_modes[:, None, :] - sample_data[None, :, :]
             sq_dists = np.sum(diffs**2, axis=2)  # Shape: (batch_size, n_samples)
-            
+          
             # Gaussian kernel weights
             weights = np.exp(-0.5 * sq_dists / (h**2))  # Shape: (batch_size, n_samples)
-            
+
             # Compute weighted means for each mode in batch
             weight_sums = np.sum(weights, axis=1, keepdims=True)  # Shape: (batch_size, 1)
-            
+
             # Avoid division by zero
             weight_sums = np.maximum(weight_sums, 1e-10)
             
@@ -168,7 +150,20 @@ class SAMS_Clustering:
         lambda_i = (beta_hat / pilot_densities) ** self.alpha2
         bandwidths = lambda_i * self.alpha1
         
-        return np.median(bandwidths)
+        # Stability improvements: ensure reasonable bandwidth
+        median_bandwidth = np.median(bandwidths)
+        
+        # Check for invalid values
+        if not np.isfinite(median_bandwidth) or median_bandwidth <= 0:
+            # Fallback to simple Silverman's rule
+            fallback_bandwidth = sample_std * (n_samples ** (-1.0 / (n_features + 4)))
+            median_bandwidth = fallback_bandwidth
+        
+        # Ensure bandwidth is within reasonable bounds
+        median_bandwidth = max(median_bandwidth, 1e-6)  # Minimum bandwidth
+        median_bandwidth = min(median_bandwidth, 10.0)   # Maximum bandwidth
+        
+        return median_bandwidth
     
     def compute_automatic_sample_fraction(self, X):
         """
@@ -220,7 +215,13 @@ class SAMS_Clustering:
         decay_rate = min(iteration / 20.0, 1.0)  # Converge to smaller samples in ~20 steps
         current_size = max_size - decay_rate * (max_size - base_size)
         
-        return max(int(current_size), base_size)  # Ensure never goes below base_size
+        # Stability improvements: ensure valid sample size
+        adaptive_size = int(current_size)
+        adaptive_size = max(adaptive_size, 10)        # Minimum 10 samples for statistical validity
+        adaptive_size = max(adaptive_size, base_size) # Never go below base_size
+        adaptive_size = min(adaptive_size, max_size)  # Never exceed max_size
+        
+        return adaptive_size
     
     def fit_predict(self, X):
         """
@@ -232,60 +233,42 @@ class SAMS_Clustering:
         # Compute bandwidth
         if self.bandwidth is None:
             self.bandwidth = self.compute_data_driven_bandwidth(X)
-            print(f"Data-driven bandwidth selected: {self.bandwidth:.4f}")
         
         # Compute sample fraction if automatic
         if self.sample_fraction is None:
             self.sample_fraction = self.compute_automatic_sample_fraction(X)
             print(f"Automatic sample fraction selected: {self.sample_fraction*100:.2f}%")
+
+        base_sample_size = int(self.sample_fraction * n_samples)
+        base_sample_size = max(base_sample_size, 10)  # Minimum 10 samples
+        base_sample_size = min(base_sample_size, n_samples)  # Cannot exceed total samples
         
         # SAMS: Initialize modes for ALL data points (correct algorithm)
         # The O(n) speedup comes from using stochastic subsamples in mean-shift updates,
         # NOT from reducing the number of modes tracked
         modes = X.copy()  # Track all points as in standard mean-shift
-        
-        print(f"SAMS: Tracking all {n_samples} modes with stochastic subsampling for O(n) complexity")
-        
-        print(f"Starting SAMS clustering with {n_samples} points")
-        
-        if self.adaptive_sampling:
-            # Adaptive sampling parameters following paper's specific guidance:
-            # "sampled fractions ranging between 0.1% and 1% may be sufficient 
-            #  to run SAMS when n ≃ 10^5 and with clusters accounting for ≥1% of the data"
-            
-            # Scale recommendations based on dataset size relative to paper's n ≃ 10^5
-            reference_size = 100000  # Paper's reference: n ≃ 10^5
-            
-            # For smaller datasets, may need higher fractions; for larger, can use lower
-            if n_samples >= reference_size:
-                # Large datasets: use paper's 0.1%-1% range
-                min_fraction = 0.001  # 0.1%
-                max_fraction = 0.01   # 1.0%
-            else:
-                # Smaller datasets: scale up fractions to maintain statistical power
-                scaling_factor = max(1.0, np.sqrt(reference_size / n_samples))
-                min_fraction = min(0.005, 0.001 * scaling_factor)  # Cap at 0.5%
-                max_fraction = min(0.02, 0.01 * scaling_factor)   # Cap at 2.0%
-            
-            # Ensure user's sample_fraction falls within paper's recommended range
-            target_fraction = max(min_fraction, min(max_fraction, self.sample_fraction))
-            
-            base_sample_size = max(1, int(target_fraction * n_samples))  # Target final size
-            max_sample_size = max(base_sample_size, int(max_fraction * n_samples))  # Start higher
-            
-            print(f"Paper-compliant fractions: {min_fraction*100:.1f}%-{max_fraction*100:.1f}% (n≃{reference_size:,})")
-            print(f"Adaptive sampling: {target_fraction*100:.2f}% → {max_fraction*100:.2f}%")
-        else:
-            # Fixed sampling: use user's exact sample_fraction
-            base_sample_size = max(1, int(self.sample_fraction * n_samples))
-            max_sample_size = base_sample_size  # No variation
-            
-            print(f"Fixed sampling: {self.sample_fraction*100:.2f}% ({base_sample_size} points)")
-        
+
+        print(f"Starting SAMS with {n_samples} points")
+        print(f"Bandwidth: {self.bandwidth:.4f}")
+                                
         # Main SAMS algorithm loop
         convergence_window = []
         
         for iteration in range(self.max_iter):
+            # Compute adaptive bandwidth
+            if self.adaptive_bandwidth:
+                try:
+                    self.bandwidth = self.compute_data_driven_bandwidth(modes)
+                except:
+                    # If adaptive bandwidth fails, keep current bandwidth
+                    pass
+
+            if self.adaptive_sampling:    
+                base_sample_size = self.adaptive_sample_size(iteration, base_sample_size, n_samples)
+                base_sample_size = int(base_sample_size)
+                base_sample_size = max(base_sample_size, 10)  # Minimum 10 samples
+                base_sample_size = min(base_sample_size, n_samples)  # Cannot exceed total samples
+
             # Generate stochastic subsample for this iteration (key to O(n) speedup)
             sample_indices = np.random.choice(n_samples, base_sample_size, replace=False)
             sample_data = X[sample_indices]
@@ -396,7 +379,7 @@ def generate_test_data(n_samples=1000, dataset_type='blobs'):
 
 
 if __name__ == "__main__":
-    print("FIXED SAMS CLUSTERING - FINAL IMPLEMENTATION")
+    print("SAMS CLUSTERING")
     print("="*60)
     
     # Quick validation test
@@ -411,5 +394,6 @@ if __name__ == "__main__":
     labels, centers = sams.fit_predict(X)
     sams_time = time.time() - start_time
     
-    print(f"Fixed SAMS: {len(np.unique(labels))} clusters in {sams_time:.3f}s")
-    print("✅ Ready for full experimental validation!")
+    print(f"   Time: {sams_time:.3f}s")
+    print(f"   Clusters: {len(np.unique(labels))}")
+    print(f"   Bandwidth: {sams.bandwidth:.4f}")

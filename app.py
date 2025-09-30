@@ -82,38 +82,13 @@ def main():
                 n_features = 2
             st.info(f"**Image Segmentation** - {n_features}D clustering with {feature_type.replace('_', ' ')} features")
         else:
-            n_features = st.slider(
+            n_features = st.number_input(
                 "Number of Dimensions",
                 min_value=1,
-                max_value=128,
                 value=2,
                 step=1,
-                help="Choose dimensionality from 1D to 128D. Algorithm supports arbitrary dimensions - slider limited to 128D for practical demo purposes. Higher dimensions will use PCA for visualization."
+                help="Choose dimensionality. Algorithm supports arbitrary dimensions. Higher dimensions will use PCA for visualization."
             )
-            
-            # Display dimension info
-            if n_features == 1:
-                st.info("**1D Mode** - One-dimensional clustering")
-            elif n_features == 2:
-                st.info("**2D Mode** - Standard two-dimensional clustering")
-            elif n_features == 3:
-                st.info("**3D Mode** - Three-dimensional clustering with 3D visualization")
-            elif n_features <= 10:
-                st.info(f"**{n_features}D Mode** - Multi-dimensional clustering")
-            else:
-                st.info(f"**{n_features}D High-Dimensional Mode** - Visualization will use PCA projection to 2D")
-        
-        # Map to internal dataset_type for compatibility with existing generate_dataset function
-        if data_type == "Spheres":
-            dataset_type = "3D Spheres"  # Always use 3D spheres logic for spheres
-        elif data_type == "Gaussian Blobs" and n_features > 10:
-            dataset_type = "High-Dimensional Blobs"  # Use high-D logic for >10 dimensions
-        elif data_type == "Gaussian Blobs" and n_features == 3:
-            dataset_type = "3D Blobs"  # Use 3D blobs logic for exactly 3D
-        elif data_type == "Gaussian Blobs":
-            dataset_type = "Gaussian Blobs"  # Standard Gaussian blobs for other dimensions
-        else:
-            dataset_type = data_type  # Direct mapping for other types
         
         # Sample size
         if data_type != "Image Segmentation":
@@ -153,11 +128,11 @@ def main():
         
         # Number of clusters (for applicable data types)
         if data_type in ["Gaussian Blobs", "Mixed Densities"]:
-            n_centers = st.slider(
+            n_centers = st.number_input(
                 "Number of Clusters",
                 min_value=2,
-                max_value=10,
                 value=4,
+                step=1,
                 help="Number of clusters in the dataset"
             )
         elif data_type == "Two Moons":
@@ -174,7 +149,7 @@ def main():
         )
         
         # Cluster standard deviation (for blobs)
-        if dataset_type == "Gaussian Blobs":
+        if data_type == "Gaussian Blobs":
             cluster_std = st.slider(
                 "Cluster Std Dev",
                 min_value=0.5,
@@ -187,37 +162,13 @@ def main():
         st.subheader("Algorithm Parameters")
         
         # SAMS Parameters
-        with st.expander("🔬 SAMS Algorithm Parameters", expanded=True):
-            st.markdown("**SAMS (Stochastic Approximation Mean-Shift) Configuration**")
-            
-            # Sample fraction selection
-            sample_fraction_mode = st.radio(
-                "Sample Fraction Selection", 
-                ["Automatic (Data-driven)", "Manual"],
-                help="Choose how to set the sample fraction. Automatic uses paper recommendations based on dataset size and dimensionality.",
-                key="sams_sample_fraction_mode"
-            )
-            
-            if sample_fraction_mode == "Manual":
-                # Adaptive parameter recommendations for high-dimensional data
-                if n_features >= 64:
-                    recommended_sample_fraction = max(2.0, min(5.0, 2.0 + (n_features - 64) / 32.0))
-                    st.info(f"**High-D Recommendation**: Sample fraction ≥ {recommended_sample_fraction:.1f}% for {n_features}D data")
-                
-                sample_fraction = st.slider(
-                    "Sample Fraction (%)",
-                    min_value=0.1,
-                    max_value=100.0,
-                    value=3.0 if n_features >= 64 else 2.0,
-                    step=0.1,
-                    help="Percentage of data points to sample at each iteration. Lower values enable processing of very large datasets. Higher values recommended for high-dimensional data. 100% = standard mean-shift.",
-                    key="sams_sample_fraction"
-                ) / 100
-            else:
-                sample_fraction = None  # Will be computed automatically
-                st.info("**Automatic mode**: Sample fraction will be selected based on dataset size and paper recommendations")
-            
+        with st.expander("🔬 SAMS Algorithm Parameters", expanded=True):    
             # Bandwidth selection
+            adaptive_bandwidth = st.checkbox(
+                "Use adaptive bandwidth estimate",
+                value=True,
+                help="Adjust bandwidth per iteration"
+            )
             sams_bandwidth_mode = st.radio(
                 "Bandwidth Selection",
                 ["Automatic (Silverman's rule)", "Manual"],
@@ -238,22 +189,30 @@ def main():
             else:
                 sams_bandwidth = None
             
+            # Sample fraction parameter (SAMS only)
+            sample_fraction = st.number_input(
+                "Sample Fraction (%)",
+                min_value=0.1,
+                max_value=100.0,
+                value=2.0,
+                step=0.1,
+                help="Percentage of data points to sample at each iteration. Lower values enable processing of very large datasets. 100% = standard mean-shift. This parameter is specific to SAMS algorithm.",
+                key="sams_sample_fraction"
+            ) / 100
+            
             # Max iterations
-            sams_max_iter = st.slider(
+            sams_max_iter = st.number_input(
                 "Max Iterations",
                 min_value=50,
                 max_value=5000,
-                value=150,
-                step=25,
+                value=300,
+                step=50,
                 help="Maximum number of iterations for SAMS",
                 key="sams_max_iter"
             )
             
             # Advanced step size parameters (no nested expander)
-            st.markdown("---")
-            st.markdown("**Advanced Step Size Parameters:**")
-            st.info("These step size parameters control the data-driven bandwidth computation. Leave as 'Automatic' unless you need fine-tuning.")
-            
+            st.markdown("**Advanced Step Size Parameters:**")            
             alpha1_mode = st.radio(
                 "Alpha1 (Scott's Rule Parameter)",
                 ["Automatic", "Manual"],
@@ -294,84 +253,6 @@ def main():
             else:
                 alpha2 = None
         
-        # Standard Mean-Shift Parameters
-        with st.expander("📊 Standard Mean-Shift Parameters", expanded=False):
-            st.markdown("**Standard Mean-Shift Configuration**")
-            
-            standard_bandwidth_mode = st.radio(
-                "Bandwidth Selection",
-                ["Use SAMS Bandwidth", "Automatic (Silverman's rule)", "Manual"],
-                help="Choose how to set the bandwidth parameter for Standard Mean-Shift",
-                key="standard_bandwidth_mode"
-            )
-            
-            if standard_bandwidth_mode == "Manual":
-                standard_bandwidth = st.slider(
-                    "Bandwidth",
-                    min_value=0.1,
-                    max_value=2.0,
-                    value=0.5,
-                    step=0.05,
-                    help="Bandwidth parameter for Standard Mean-Shift",
-                    key="standard_bandwidth"
-                )
-            elif standard_bandwidth_mode == "Use SAMS Bandwidth":
-                standard_bandwidth = sams_bandwidth  # Use same as SAMS
-                st.info("Will use the same bandwidth as SAMS for fair comparison")
-            else:
-                standard_bandwidth = None
-            
-            standard_max_iter = st.slider(
-                "Max Iterations",
-                min_value=50,
-                max_value=5000,
-                value=150,
-                step=25,
-                help="Maximum number of iterations for Standard Mean-Shift",
-                key="standard_max_iter"
-            )
-        
-        # Scikit-Learn Mean-Shift Parameters
-        with st.expander("🔧 Scikit-Learn Mean-Shift Parameters", expanded=False):
-            st.markdown("**Scikit-Learn Mean-Shift Configuration**")
-            
-            sklearn_bandwidth_mode = st.radio(
-                "Bandwidth Selection",
-                ["Use SAMS Bandwidth", "Automatic (estimate_bandwidth)", "Manual"],
-                help="Choose how to set the bandwidth parameter for Scikit-Learn Mean-Shift",
-                key="sklearn_bandwidth_mode"
-            )
-            
-            if sklearn_bandwidth_mode == "Manual":
-                sklearn_bandwidth = st.slider(
-                    "Bandwidth",
-                    min_value=0.1,
-                    max_value=2.0,
-                    value=0.5,
-                    step=0.05,
-                    help="Bandwidth parameter for Scikit-Learn Mean-Shift",
-                    key="sklearn_bandwidth"
-                )
-            elif sklearn_bandwidth_mode == "Use SAMS Bandwidth":
-                sklearn_bandwidth = sams_bandwidth  # Use same as SAMS
-                st.info("Will use the same bandwidth as SAMS for fair comparison")
-            else:
-                sklearn_bandwidth = None
-            
-            sklearn_max_iter = st.slider(
-                "Max Iterations",
-                min_value=50,
-                max_value=5000,
-                value=300,
-                step=25,
-                help="Maximum number of iterations for Scikit-Learn Mean-Shift",
-                key="sklearn_max_iter"
-            )
-        
-        # Set unified parameters for compatibility
-        bandwidth = sams_bandwidth  # Use SAMS bandwidth as the primary
-        max_iter = sams_max_iter    # Use SAMS max_iter as the primary
-        
         # Comparison options
         st.subheader("Comparison")
         compare_standard = st.checkbox(
@@ -379,11 +260,84 @@ def main():
             value=True,
             help="Compare with our StandardMeanShift implementation"
         )
+
+        standard_bandwidth_mode = None
+        standard_bandwidth = None
+        standard_max_iter = 300
+
+        if compare_standard:
+            # Standard Mean-Shift Parameters
+            with st.expander("📊 Standard Mean-Shift Parameters", expanded=False):
+                
+                standard_max_iter = st.slider(
+                    "Max Iterations",
+                    min_value=50,
+                    max_value=5000,
+                    value=300,
+                    step=25,
+                    help="Maximum number of iterations for Standard Mean-Shift",
+                    key="standard_max_iter"
+                )
+
+                standard_bandwidth_mode = st.radio(
+                    "Bandwidth Selection",
+                    ["Automatic (Silverman's rule)", "Use SAMS Bandwidth", "Manual"],
+                    help="Choose how to set the bandwidth parameter for Standard Mean-Shift",
+                    key="standard_bandwidth_mode"
+                )
+                
+                if standard_bandwidth_mode == "Manual":
+                    standard_bandwidth = st.slider(
+                        "Bandwidth",
+                        min_value=0.1,
+                        max_value=2.0,
+                        value=0.5,
+                        step=0.05,
+                        help="Bandwidth parameter for Standard Mean-Shift",
+                        key="standard_bandwidth"
+                    )
+        
         compare_sklearn = st.checkbox(
             "Include Scikit-Learn Mean-Shift",
             value=True,
             help="Compare with sklearn.cluster.MeanShift. Each algorithm uses its own optimal bandwidth estimation for fair comparison."
         )
+
+        sklearn_bandwidth_mode = None
+        sklearn_bandwidth = None
+        sklearn_max_iter = 300
+
+        if compare_sklearn:
+            # Scikit-Learn Mean-Shift Parameters
+            with st.expander("🔧 Scikit-Learn Mean-Shift Parameters", expanded=False):
+                
+                sklearn_max_iter = st.slider(
+                    "Max Iterations",
+                    min_value=50,
+                    max_value=5000,
+                    value=300,
+                    step=25,
+                    help="Maximum number of iterations for Scikit-Learn Mean-Shift",
+                    key="sklearn_max_iter"
+                )
+
+                sklearn_bandwidth_mode = st.radio(
+                    "Bandwidth Selection",
+                    ["Automatic (estimate_bandwidth)", "Use Standard Mean-Shift Bandwidth", "Manual"] if compare_standard else ["Automatic (estimate_bandwidth)", "Use SAMS Bandwidth", "Manual"],
+                    help="Choose how to set the bandwidth parameter for Scikit-Learn Mean-Shift",
+                    key="sklearn_bandwidth_mode"
+                )
+                
+                if sklearn_bandwidth_mode == "Manual":
+                    sklearn_bandwidth = st.slider(
+                        "Bandwidth",
+                        min_value=0.1,
+                        max_value=2.0,
+                        value=0.5,
+                        step=0.05,
+                        help="Bandwidth parameter for Scikit-Learn Mean-Shift",
+                        key="sklearn_bandwidth"
+                    )
         
         # Random seed
         random_seed = st.number_input(
@@ -401,24 +355,24 @@ def main():
     if st.button("🔄 Generate Data & Run Clustering", type="primary"):
         # Pass additional parameters for image segmentation
         extra_params = {}
-        if dataset_type == "Image Segmentation":
+        if data_type == "Image Segmentation":
             extra_params['feature_type'] = feature_type
             extra_params['image_size'] = (img_height, img_width)
         
-        run_clustering_experiment(dataset_type, n_samples, n_centers, noise_level,
-                                cluster_std if dataset_type == "Gaussian Blobs" else None,
+        run_clustering_experiment(data_type, n_samples, n_centers, noise_level,
+                                cluster_std if data_type == "Gaussian Blobs" else None,
                                 sams_bandwidth, sample_fraction, sams_max_iter, 
-                                standard_bandwidth, standard_max_iter,
-                                sklearn_bandwidth, sklearn_max_iter,
+                                standard_bandwidth_mode, standard_bandwidth, standard_max_iter,
+                                sklearn_bandwidth_mode, sklearn_bandwidth, sklearn_max_iter,
                                 compare_standard, compare_sklearn, 
-                                random_seed, n_features, extra_params, alpha1, alpha2)
+                                random_seed, n_features, extra_params, alpha1, alpha2, adaptive_bandwidth)
 
-def run_clustering_experiment(dataset_type, n_samples, n_centers, noise_level, cluster_std,
+def run_clustering_experiment(data_type, n_samples, n_centers, noise_level, cluster_std,
                             sams_bandwidth, sample_fraction, sams_max_iter,
-                            standard_bandwidth, standard_max_iter,
-                            sklearn_bandwidth, sklearn_max_iter,
+                            standard_bandwidth_mode, standard_bandwidth, standard_max_iter,
+                            sklearn_bandwidth_mode, sklearn_bandwidth, sklearn_max_iter,
                             compare_standard, compare_sklearn, 
-                            random_seed, n_features=2, extra_params=None, alpha1=None, alpha2=None):
+                            random_seed, n_features=2, extra_params=None, alpha1=None, alpha2=None, adaptive_bandwidth=True):
     """Run the complete clustering experiment"""
     
     # Set random seed
@@ -428,7 +382,7 @@ def run_clustering_experiment(dataset_type, n_samples, n_centers, noise_level, c
     with st.spinner("Generating dataset..."):
         if extra_params is None:
             extra_params = {}
-        result = generate_dataset(dataset_type, n_samples, n_centers, noise_level, cluster_std, n_features, **extra_params)
+        result = generate_dataset(data_type, n_samples, n_centers, noise_level, cluster_std, n_features, **extra_params)
         
         # Handle different return types (image segmentation returns 3 values)
         if len(result) == 3:
@@ -437,14 +391,14 @@ def run_clustering_experiment(dataset_type, n_samples, n_centers, noise_level, c
             X, y_true = result
             original_image = None
     
-    st.success(f"Generated {dataset_type} dataset with {n_samples:,} points")
+    st.success(f"Generated {data_type} dataset with {n_samples:,} points")
     
     # Run clustering methods
     results = {}
     
     # SAMS clustering
     with st.spinner("Running SAMS clustering..."):
-        sams = SAMS_Clustering(bandwidth=sams_bandwidth, sample_fraction=sample_fraction, max_iter=sams_max_iter, alpha1=alpha1, alpha2=alpha2)
+        sams = SAMS_Clustering(bandwidth=sams_bandwidth, sample_fraction=sample_fraction, max_iter=sams_max_iter, alpha1=alpha1, alpha2=alpha2, adaptive_bandwidth=adaptive_bandwidth)
         
         start_time = time.time()
         labels_sams, centers_sams = sams.fit_predict(X)
@@ -462,6 +416,9 @@ def run_clustering_experiment(dataset_type, n_samples, n_centers, noise_level, c
     if compare_standard:
         with st.spinner("Running Standard Mean-Shift..."):
             try:
+                if standard_bandwidth_mode == "Use SAMS Bandwidth":
+                    standard_bandwidth = sams.bandwidth
+
                 standard_ms = StandardMeanShift(bandwidth=standard_bandwidth, max_iter=standard_max_iter)
                 
                 start_time = time.time()
@@ -482,13 +439,23 @@ def run_clustering_experiment(dataset_type, n_samples, n_centers, noise_level, c
     if compare_sklearn:
         with st.spinner("Running Scikit-Learn Mean-Shift..."):
             try:
-                if sklearn_bandwidth is None:
-                    # Let MeanShift use its own bandwidth estimation (estimate_bandwidth)
-                    ms = MeanShift(bandwidth=None, max_iter=sklearn_max_iter)
-                else:
-                    # Use user-specified bandwidth for sklearn
-                    ms = MeanShift(bandwidth=sklearn_bandwidth, max_iter=sklearn_max_iter)
+                if sklearn_bandwidth_mode == "Use SAMS Bandwidth":
+                    sklearn_bandwidth = sams.bandwidth
+                elif sklearn_bandwidth_mode == "Use Standard Mean-Shift Bandwidth":
+                    sklearn_bandwidth = standard_ms.bandwidth
                 
+                # Validate bandwidth for sklearn MeanShift to prevent numerical warnings
+                if sklearn_bandwidth is not None:
+                    # Ensure bandwidth is finite and within reasonable bounds
+                    if not np.isfinite(sklearn_bandwidth) or sklearn_bandwidth <= 0:
+                        sklearn_bandwidth = None  # Fall back to automatic estimation
+                    else:
+                        # Clip to reasonable range to prevent sklearn numerical issues
+                        sklearn_bandwidth = max(min(sklearn_bandwidth, 10.0), 1e-3)
+                
+                print(f"Starting Scikit-learn Mean-Shift with {n_samples} points")
+                
+                ms = MeanShift(bandwidth=sklearn_bandwidth, max_iter=sklearn_max_iter)
                 start_time = time.time()
                 labels_ms = ms.fit_predict(X)
                 ms_time = time.time() - start_time
@@ -499,6 +466,8 @@ def run_clustering_experiment(dataset_type, n_samples, n_centers, noise_level, c
                     actual_bandwidth = estimate_bandwidth(X)
                 else:
                     actual_bandwidth = sklearn_bandwidth
+                
+                print(f"Bandwidth: {actual_bandwidth:.4f}")
                 
                 results['Scikit-Learn Mean-Shift'] = {
                     'labels': labels_ms,
@@ -511,7 +480,7 @@ def run_clustering_experiment(dataset_type, n_samples, n_centers, noise_level, c
                 st.warning(f"Scikit-Learn Mean-Shift failed: {str(e)}")
     
     # Display results
-    display_results(X, y_true, results, dataset_type, sample_fraction, original_image)
+    display_results(X, y_true, results, data_type, sample_fraction, original_image)
 
 def generate_synthetic_image(size=(60, 60), n_regions=4, noise_level=0.05):
     """Generate synthetic image for segmentation testing"""
@@ -585,10 +554,10 @@ def extract_features_from_image(image, feature_type='intensity_position'):
     
     return np.array(features)
 
-def generate_dataset(dataset_type, n_samples, n_centers, noise_level, cluster_std=None, n_features=2, feature_type=None, image_size=None):
+def generate_dataset(data_type, n_samples, n_centers, noise_level, cluster_std=None, n_features=2, feature_type=None, image_size=None):
     """Generate synthetic datasets based on user parameters"""
     
-    if dataset_type == "Gaussian Blobs":
+    if data_type == "Gaussian Blobs":
         X, y_true = make_blobs(
             n_samples=n_samples,
             centers=n_centers,
@@ -598,108 +567,8 @@ def generate_dataset(dataset_type, n_samples, n_centers, noise_level, cluster_st
         )
         # Add noise
         X += np.random.normal(0, noise_level, X.shape)
-        
-    elif dataset_type == "3D Blobs":
-        X, y_true = make_blobs(
-            n_samples=n_samples,
-            centers=n_centers,
-            n_features=3,
-            cluster_std=1.2,
-            center_box=(-4, 4),
-            random_state=42
-        )
-        # Add noise
-        X += np.random.normal(0, noise_level, X.shape)
-        
-    elif dataset_type == "3D Spheres":
-        # Generate concentric 3D spheres
-        np.random.seed(42)
-        
-        # Inner sphere (cluster 0)
-        n_inner = n_samples // 3
-        inner_r = np.random.uniform(1.0, 2.0, n_inner)
-        inner_theta = np.random.uniform(0, 2*np.pi, n_inner)
-        inner_phi = np.random.uniform(0, np.pi, n_inner)
-        
-        inner_x = inner_r * np.sin(inner_phi) * np.cos(inner_theta)
-        inner_y = inner_r * np.sin(inner_phi) * np.sin(inner_theta)
-        inner_z = inner_r * np.cos(inner_phi)
-        
-        # Middle sphere (cluster 1)
-        n_middle = n_samples // 3
-        middle_r = np.random.uniform(3.0, 3.8, n_middle)
-        middle_theta = np.random.uniform(0, 2*np.pi, n_middle)
-        middle_phi = np.random.uniform(0, np.pi, n_middle)
-        
-        middle_x = middle_r * np.sin(middle_phi) * np.cos(middle_theta)
-        middle_y = middle_r * np.sin(middle_phi) * np.sin(middle_theta)
-        middle_z = middle_r * np.cos(middle_phi)
-        
-        # Outer sphere (cluster 2)
-        n_outer = n_samples - n_inner - n_middle
-        outer_r = np.random.uniform(5.0, 6.0, n_outer)
-        outer_theta = np.random.uniform(0, 2*np.pi, n_outer)
-        outer_phi = np.random.uniform(0, np.pi, n_outer)
-        
-        outer_x = outer_r * np.sin(outer_phi) * np.cos(outer_theta)
-        outer_y = outer_r * np.sin(outer_phi) * np.sin(outer_theta)
-        outer_z = outer_r * np.cos(outer_phi)
-        
-        # Combine all spheres
-        X = np.vstack([
-            np.column_stack([inner_x, inner_y, inner_z]),
-            np.column_stack([middle_x, middle_y, middle_z]),
-            np.column_stack([outer_x, outer_y, outer_z])
-        ])
-        
-        y_true = np.hstack([
-            np.zeros(n_inner),
-            np.ones(n_middle),
-            np.full(n_outer, 2)
-        ])
-        
-        # Add noise
-        X += np.random.normal(0, noise_level, X.shape)
-        
-    elif dataset_type == "Concentric Circles":
-        if n_features == 3:
-            # Create 3D version of circles by extending to cylinder
-            X_2d, y_true = make_circles(
-                n_samples=n_samples,
-                noise=noise_level,
-                factor=0.6,
-                random_state=42
-            )
-            # Add z dimension with some variation
-            z = np.random.normal(0, 0.5, n_samples)
-            X = np.column_stack([X_2d, z])
-        else:
-            X, y_true = make_circles(
-                n_samples=n_samples,
-                noise=noise_level,
-                factor=0.6,
-                random_state=42
-            )
-        
-    elif dataset_type == "Two Moons":
-        if n_features == 3:
-            # Create 3D version of moons
-            X_2d, y_true = make_moons(
-                n_samples=n_samples,
-                noise=noise_level,
-                random_state=42
-            )
-            # Add z dimension with some variation
-            z = np.random.normal(0, 0.3, n_samples)
-            X = np.column_stack([X_2d, z])
-        else:
-            X, y_true = make_moons(
-                n_samples=n_samples,
-                noise=noise_level,
-                random_state=42
-            )
-        
-    elif dataset_type == "Mixed Densities":
+                        
+    elif data_type == "Mixed Densities":
         # Create clusters with different densities
         np.random.seed(42)
         
@@ -711,10 +580,7 @@ def generate_dataset(dataset_type, n_samples, n_centers, noise_level, cluster_st
         density_levels = np.linspace(0.3, 2.0, n_centers)  # From high to low density
         
         # Generate cluster centers
-        if n_features == 3:
-            centers = np.random.uniform(-3, 3, (n_centers, 3))
-        else:
-            centers = np.random.uniform(-3, 3, (n_centers, n_features))
+        centers = np.random.uniform(-3, 3, (n_centers, n_features))
         
         # Distribute samples across clusters
         samples_per_cluster = [n_samples // n_centers] * n_centers
@@ -725,10 +591,7 @@ def generate_dataset(dataset_type, n_samples, n_centers, noise_level, cluster_st
             center = centers[i]
             density = density_levels[i]
             
-            if n_features == 3:
-                cov_matrix = np.eye(3) * density
-            else:
-                cov_matrix = np.eye(n_features) * density
+            cov_matrix = np.eye(n_features) * density
             
             cluster_data = np.random.multivariate_normal(center, cov_matrix, size=n_cluster)
             clusters.append(cluster_data)
@@ -740,25 +603,7 @@ def generate_dataset(dataset_type, n_samples, n_centers, noise_level, cluster_st
         # Add noise
         X += np.random.normal(0, noise_level, X.shape)
     
-    elif dataset_type == "High-Dimensional Blobs":
-        # Generate high-dimensional clustered data with standardization
-        X, y_true = make_blobs(
-            n_samples=n_samples,
-            centers=n_centers,
-            n_features=n_features,
-            cluster_std=1.5,  # Slightly higher std for better separation in high dimensions
-            center_box=(-5.0, 5.0),
-            random_state=42
-        )
-        # Add noise scaled appropriately for high dimensions
-        noise_scale = noise_level * np.sqrt(n_features / 2.0)  # Scale noise with dimensionality
-        X += np.random.normal(0, noise_scale, X.shape)
-        
-        # Standardize features for high dimensions
-        scaler = StandardScaler()
-        X = scaler.fit_transform(X)
-    
-    elif dataset_type == "Image Segmentation":
+    elif data_type == "Image Segmentation":
         # Generate synthetic image
         if image_size is None:
             size = (60, 60)
@@ -807,19 +652,14 @@ def generate_dataset(dataset_type, n_samples, n_centers, noise_level, cluster_st
         )
         # Add noise
         X += np.random.normal(0, noise_level, X.shape)
-    
-    # Standardize (except for images and high-dimensional data which is pre-standardized)
-    if dataset_type != "High-Dimensional Blobs":
-        scaler = StandardScaler()
-        X = scaler.fit_transform(X)
-    
+        
     return X, y_true.astype(int)
 
-def display_results(X, y_true, results, dataset_type, sample_fraction, original_image=None):
+def display_results(X, y_true, results, data_type, sample_fraction, original_image=None):
     """Display clustering results and comparisons"""
     
     # Special handling for image segmentation
-    if dataset_type == "Image Segmentation" and original_image is not None:
+    if data_type == "Image Segmentation" and original_image is not None:
         st.subheader("Original Image")
         fig, ax = plt.subplots(figsize=(6, 6))
         ax.imshow(original_image, cmap='gray')
@@ -836,7 +676,7 @@ def display_results(X, y_true, results, dataset_type, sample_fraction, original_
     # Performance metrics table
     st.subheader("Performance Metrics")
     metrics_df = calculate_metrics(X, y_true, results)
-    st.dataframe(metrics_df, use_container_width=True)
+    st.dataframe(metrics_df, width='stretch')
     
     # Bottom section: Runtime comparison with experiment summary and performance comparison
     if len(results) > 1:
@@ -848,7 +688,7 @@ def display_results(X, y_true, results, dataset_type, sample_fraction, original_
         with bottom_col1:
             st.markdown("**Experiment Summary**")
             st.info(f"""
-            **Dataset:** {dataset_type}
+            **Dataset:** {data_type}
             
             **Size:** {len(X):,} points
             
@@ -1060,9 +900,9 @@ def plot_clustering_result_streamlit(X, labels, config_name, n_samples, sample_f
     plt.tight_layout()
     return fig
 
-def create_data_distribution_plot(X, y_true, dataset_type, n_samples):
+def create_data_distribution_plot(X, y_true, data_type, n_samples):
     """Create data distribution plot using the streamlit version of plot_clustering_result"""
-    return plot_clustering_result_streamlit(X, y_true, dataset_type, n_samples)
+    return plot_clustering_result_streamlit(X, y_true, data_type, n_samples)
 
 def create_individual_clustering_plot(X, labels, method_name, result_info):
     """Create clustering result plot using matplotlib"""

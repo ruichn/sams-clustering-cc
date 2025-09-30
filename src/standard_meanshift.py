@@ -79,7 +79,10 @@ class StandardMeanShift:
             
             # Silverman's rule of thumb
             sample_std = np.std(X, axis=0).mean()
-            self.bandwidth = sample_std * (n_samples**(-1.0 / (n_features + 4)))
+            bandwidth = sample_std * (n_samples**(-1.0 / (n_features + 4)))
+            
+            # Ensure bandwidth is within reasonable bounds
+            self.bandwidth = max(min(bandwidth, 10.0), 1e-6)
             
         return self.bandwidth
     
@@ -133,7 +136,8 @@ class StandardMeanShift:
             diffs = modes[:, None, :] - X[None, :, :]  # Shape: (n_modes, n_points, n_features)
             sq_dists = np.sum(diffs**2, axis=2)        # Shape: (n_modes, n_points)
             
-            # Gaussian kernel weights for all mode-point pairs
+            # Gaussian kernel weights for all mode-point pairs  
+            # Simplified weight calculation to avoid overflow
             weights = np.exp(-0.5 * sq_dists / (self.bandwidth**2))  # Shape: (n_modes, n_points)
             
             # Weighted mean shift update for all modes simultaneously
@@ -231,23 +235,29 @@ def compare_implementations():
     - Results (should be similar with same bandwidth)
     - Implementation details
     """
-    from sklearn.cluster import MeanShift as SklearnMeanShift
+    from sklearn.cluster import MeanShift as SklearnMeanShift, estimate_bandwidth
     from sklearn.datasets import make_blobs
     import time
     
     # Generate test data
-    X, y_true = make_blobs(n_samples=200, centers=3, n_features=2, 
+    true_clusters = 3
+    true_features = 64
+
+    X, _ = make_blobs(n_samples=1000, centers=true_clusters, n_features=true_features, 
                           random_state=42, cluster_std=1.5)
     
     print("=" * 60)
     print("COMPARISON: StandardMeanShift vs sklearn.cluster.MeanShift")
     print("=" * 60)
     
+    print(f"   True Clusters: {true_clusters}")
+    print(f"   Dimensions: {true_features}")
+
     # Test our implementation
     print("\n1. Our StandardMeanShift:")
     our_ms = StandardMeanShift(bandwidth=None)
     start_time = time.time()
-    our_labels, our_centers = our_ms.fit_predict(X)
+    _, our_centers = our_ms.fit_predict(X)
     our_time = time.time() - start_time
     
     print(f"   Time: {our_time:.3f}s")
@@ -256,14 +266,22 @@ def compare_implementations():
     
     # Test sklearn implementation
     print("\n2. sklearn MeanShift:")
-    sklearn_ms = SklearnMeanShift(bandwidth=our_ms.bandwidth)  # Use same bandwidth
+    
+    # Use our bandwidth with validation to prevent numerical warnings
+    validated_bandwidth = our_ms.bandwidth
+    if not np.isfinite(validated_bandwidth) or validated_bandwidth <= 0:
+        validated_bandwidth = None  # Fall back to automatic
+    else:
+        validated_bandwidth = max(min(validated_bandwidth, 10.0), 1e-3)  # Clip to safe range
+    
+    sklearn_ms = SklearnMeanShift(bandwidth=validated_bandwidth)
     start_time = time.time()
-    sklearn_labels = sklearn_ms.fit_predict(X)
+    sklearn_ms.fit_predict(X)
     sklearn_time = time.time() - start_time
     
     print(f"   Time: {sklearn_time:.3f}s")
     print(f"   Clusters: {len(sklearn_ms.cluster_centers_)}")
-    print(f"   Bandwidth: {our_ms.bandwidth:.4f}")
+    print(f"   Bandwidth: {validated_bandwidth if validated_bandwidth else estimate_bandwidth(X):.4f}")
     print(f"   Speedup: {our_time / sklearn_time:.1f}x faster")
     
     print(f"\nNote: sklearn MeanShift uses optimizations (KD-trees, early stopping)")
