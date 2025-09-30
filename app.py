@@ -1,3 +1,7 @@
+"""
+SAMS Clustering Demo - v2.1.0
+Numerical stability improvements and enhanced UI
+"""
 import streamlit as st
 import numpy as np
 import pandas as pd
