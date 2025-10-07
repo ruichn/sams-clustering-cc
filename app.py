@@ -166,7 +166,14 @@ def main():
         st.subheader("Algorithm Parameters")
         
         # SAMS Parameters
-        with st.expander("🔬 SAMS Algorithm Parameters", expanded=True):    
+        with st.expander("🔬 SAMS Algorithm Parameters", expanded=True):
+            # Method selection
+            run_both_sams = st.checkbox(
+                "Run both SAMS methods (fit_predict & fit)",
+                value=True,
+                help="Compare both SAMS implementations side-by-side"
+            )
+
             # Bandwidth selection
             adaptive_bandwidth = st.checkbox(
                 "Use adaptive bandwidth estimate",
@@ -365,18 +372,18 @@ def main():
         
         run_clustering_experiment(data_type, n_samples, n_centers, noise_level,
                                 cluster_std if data_type == "Gaussian Blobs" else None,
-                                sams_bandwidth, sample_fraction, sams_max_iter, 
+                                sams_bandwidth, sample_fraction, sams_max_iter,
                                 standard_bandwidth_mode, standard_bandwidth, standard_max_iter,
                                 sklearn_bandwidth_mode, sklearn_bandwidth, sklearn_max_iter,
-                                compare_standard, compare_sklearn, 
-                                random_seed, n_features, extra_params, alpha1, alpha2, adaptive_bandwidth)
+                                compare_standard, compare_sklearn,
+                                random_seed, n_features, extra_params, alpha1, alpha2, adaptive_bandwidth, run_both_sams)
 
 def run_clustering_experiment(data_type, n_samples, n_centers, noise_level, cluster_std,
                             sams_bandwidth, sample_fraction, sams_max_iter,
                             standard_bandwidth_mode, standard_bandwidth, standard_max_iter,
                             sklearn_bandwidth_mode, sklearn_bandwidth, sklearn_max_iter,
-                            compare_standard, compare_sklearn, 
-                            random_seed, n_features=2, extra_params=None, alpha1=None, alpha2=None, adaptive_bandwidth=True):
+                            compare_standard, compare_sklearn,
+                            random_seed, n_features=2, extra_params=None, alpha1=None, alpha2=None, adaptive_bandwidth=True, run_both_sams=True):
     """Run the complete clustering experiment"""
     
     # Set random seed
@@ -399,22 +406,56 @@ def run_clustering_experiment(data_type, n_samples, n_centers, noise_level, clus
     
     # Run clustering methods
     results = {}
-    
-    # SAMS clustering
-    with st.spinner("Running SAMS clustering..."):
-        sams = SAMS_Clustering(bandwidth=sams_bandwidth, sample_fraction=sample_fraction, max_iter=sams_max_iter, alpha1=alpha1, alpha2=alpha2, adaptive_bandwidth=adaptive_bandwidth)
-        
-        start_time = time.time()
-        labels_sams, centers_sams = sams.fit_predict(X)
-        sams_time = time.time() - start_time
-        
-        results['SAMS'] = {
-            'labels': labels_sams,
-            'centers': centers_sams,
-            'time': sams_time,
-            'bandwidth': sams.bandwidth,
-            'n_clusters': len(np.unique(labels_sams))
-        }
+
+    # SAMS clustering - run both methods or just fit_predict
+    if run_both_sams:
+        # Run fit_predict
+        with st.spinner("Running SAMS fit_predict clustering..."):
+            sams_fp = SAMS_Clustering(bandwidth=sams_bandwidth, sample_fraction=sample_fraction, max_iter=sams_max_iter, alpha1=alpha1, alpha2=alpha2, adaptive_bandwidth=adaptive_bandwidth)
+
+            start_time = time.time()
+            labels_sams_fp, centers_sams_fp = sams_fp.fit_predict(X)
+            sams_fp_time = time.time() - start_time
+
+            results['SAMS (fit_predict)'] = {
+                'labels': labels_sams_fp,
+                'centers': centers_sams_fp,
+                'time': sams_fp_time,
+                'bandwidth': sams_fp.bandwidth,
+                'n_clusters': len(np.unique(labels_sams_fp))
+            }
+
+        # Run fit
+        with st.spinner("Running SAMS fit clustering..."):
+            sams_f = SAMS_Clustering(bandwidth=sams_bandwidth, sample_fraction=sample_fraction, max_iter=sams_max_iter, alpha1=alpha1, alpha2=alpha2, adaptive_bandwidth=adaptive_bandwidth)
+
+            start_time = time.time()
+            labels_sams_f, centers_sams_f = sams_f.fit(X)
+            sams_f_time = time.time() - start_time
+
+            results['SAMS (fit)'] = {
+                'labels': labels_sams_f,
+                'centers': centers_sams_f,
+                'time': sams_f_time,
+                'bandwidth': sams_f.bandwidth,
+                'n_clusters': len(np.unique(labels_sams_f))
+            }
+    else:
+        # Run only fit_predict
+        with st.spinner("Running SAMS fit_predict clustering..."):
+            sams = SAMS_Clustering(bandwidth=sams_bandwidth, sample_fraction=sample_fraction, max_iter=sams_max_iter, alpha1=alpha1, alpha2=alpha2, adaptive_bandwidth=adaptive_bandwidth)
+
+            start_time = time.time()
+            labels_sams, centers_sams = sams.fit_predict(X)
+            sams_time = time.time() - start_time
+
+            results['SAMS'] = {
+                'labels': labels_sams,
+                'centers': centers_sams,
+                'time': sams_time,
+                'bandwidth': sams.bandwidth,
+                'n_clusters': len(np.unique(labels_sams))
+            }
     
     # Standard Mean-Shift (if requested)
     if compare_standard:
@@ -703,19 +744,29 @@ def display_results(X, y_true, results, data_type, sample_fraction, original_ima
         
         with bottom_col2:
             st.markdown("**Performance Comparison**")
-            sams_result = results.get('SAMS')
+            # Get SAMS results (either single or both methods)
+            sams_fit_predict = results.get('SAMS (fit_predict)') or results.get('SAMS')
+            sams_fit = results.get('SAMS (fit)')
             standard_result = results.get('Standard Mean-Shift')
             sklearn_result = results.get('Scikit-Learn Mean-Shift')
-            
-            if sams_result and (standard_result or sklearn_result):
+
+            # Use fit_predict as the primary SAMS method for comparison
+            primary_sams = sams_fit_predict if sams_fit_predict else sams_fit
+
+            if primary_sams and (standard_result or sklearn_result):
                 # Calculate speedups
                 if standard_result:
-                    speedup_standard = standard_result['time'] / sams_result['time'] if sams_result['time'] > 0 else 0
+                    speedup_standard = standard_result['time'] / primary_sams['time'] if primary_sams['time'] > 0 else 0
                     st.info(f"**SAMS vs Standard:**\n{speedup_standard:.1f}x faster")
-                
+
                 if sklearn_result:
-                    speedup_sklearn = sklearn_result['time'] / sams_result['time'] if sams_result['time'] > 0 else 0
+                    speedup_sklearn = sklearn_result['time'] / primary_sams['time'] if primary_sams['time'] > 0 else 0
                     st.info(f"**SAMS vs Sklearn:**\n{speedup_sklearn:.1f}x faster")
+
+            # Compare fit_predict vs fit if both are available
+            if sams_fit_predict and sams_fit:
+                speedup_methods = sams_fit['time'] / sams_fit_predict['time'] if sams_fit_predict['time'] > 0 else 0
+                st.info(f"**fit_predict vs fit:**\n{speedup_methods:.1f}x faster")
         
         with bottom_col3:
             st.markdown("**Runtime Chart**")
@@ -799,7 +850,7 @@ def create_clustering_plot(X, y_true, results):
             # Add cluster centers for 3D
             if result['centers'] is not None and len(result['centers']) > 0 and result['centers'].shape[1] == 3:
                 ax.scatter(result['centers'][:, 0], result['centers'][:, 1], result['centers'][:, 2],
-                          c='red', marker='x', s=100, linewidths=3)
+                          c='red', marker='x', s=100, linewidths=3, alpha=0.5)
             
             ax.set_xlabel("Feature 1")
             ax.set_ylabel("Feature 2")
@@ -812,8 +863,8 @@ def create_clustering_plot(X, y_true, results):
                 # Project cluster centers to 2D using same PCA
                 if result['centers'] is not None and len(result['centers']) > 0:
                     centers_2d = pca.transform(result['centers'])
-                    ax.scatter(centers_2d[:, 0], centers_2d[:, 1], 
-                              c='red', marker='x', s=120, linewidths=4)
+                    ax.scatter(centers_2d[:, 0], centers_2d[:, 1],
+                              c='red', marker='x', s=120, linewidths=4, alpha=0.5)
                 
                 ax.set_xlabel(f"PC1 ({pca.explained_variance_ratio_[0]:.1%} var)")
                 ax.set_ylabel(f"PC2 ({pca.explained_variance_ratio_[1]:.1%} var)")
@@ -824,9 +875,9 @@ def create_clustering_plot(X, y_true, results):
                 
                 # Add cluster centers if available
                 if result['centers'] is not None and len(result['centers']) > 0:
-                    ax.scatter(result['centers'][:, 0], 
+                    ax.scatter(result['centers'][:, 0],
                               range(len(result['centers'])),  # Use cluster indices as y-positions
-                              c='red', marker='x', s=120, linewidths=3)
+                              c='red', marker='x', s=120, linewidths=3, alpha=0.5)
                 
                 ax.set_xlabel("Feature 1")
                 ax.set_ylabel("Cluster ID (with jitter)")
@@ -835,8 +886,8 @@ def create_clustering_plot(X, y_true, results):
                 
                 # Add cluster centers for 2D
                 if result['centers'] is not None and len(result['centers']) > 0:
-                    ax.scatter(result['centers'][:, 0], result['centers'][:, 1], 
-                              c='red', marker='x', s=100, linewidths=3)
+                    ax.scatter(result['centers'][:, 0], result['centers'][:, 1],
+                              c='red', marker='x', s=100, linewidths=3, alpha=0.5)
                 
                 ax.set_xlabel("Feature 1")
                 ax.set_ylabel("Feature 2")
@@ -937,10 +988,10 @@ def create_individual_clustering_plot(X, labels, method_name, result_info):
         centers = result_info['centers']
         if X.shape[1] == 1:
             # For 1D: plot centers on x-axis at y-positions corresponding to cluster indices
-            ax.scatter(centers[:, 0], range(len(centers)), c='red', marker='x', s=120, linewidths=3, label='Centers')
+            ax.scatter(centers[:, 0], range(len(centers)), c='red', marker='x', s=120, linewidths=3, alpha=0.5, label='Centers')
         else:
             # For 2D+: plot centers normally
-            ax.scatter(centers[:, 0], centers[:, 1], c='red', marker='x', s=100, linewidths=3, label='Centers')
+            ax.scatter(centers[:, 0], centers[:, 1], c='red', marker='x', s=100, linewidths=3, alpha=0.5, label='Centers')
     
     # Set title and labels (already set above based on dimensionality)
     ax.set_title(f"{method_name} Clustering Result\n(n={len(X):,}, Clusters={n_clusters}, Time={runtime:.3f}s, BW={bandwidth:.4f})")
@@ -988,12 +1039,17 @@ def create_runtime_plot(results):
 
 def calculate_metrics(X, y_true, results):
     """Calculate clustering performance metrics"""
-    
+
     metrics_data = []
-    
+
     for method_name, result in results.items():
         labels = result['labels']
-        
+
+        # Calculate cluster sizes (sorted in descending order)
+        unique_labels, counts = np.unique(labels, return_counts=True)
+        sorted_counts = sorted(counts, reverse=True)
+        cluster_sizes_str = ', '.join([str(count) for count in sorted_counts])
+
         # Calculate metrics
         try:
             ari = adjusted_rand_score(y_true, labels)
@@ -1004,7 +1060,7 @@ def calculate_metrics(X, y_true, results):
                 silhouette = 0
         except:
             ari = nmi = silhouette = 0
-        
+
         metrics_data.append({
             'Method': method_name,
             'Clusters': result['n_clusters'],
@@ -1012,9 +1068,10 @@ def calculate_metrics(X, y_true, results):
             'Bandwidth': f"{result['bandwidth']:.4f}",
             'ARI': f"{ari:.3f}",
             'NMI': f"{nmi:.3f}",
-            'Silhouette': f"{silhouette:.3f}"
+            'Silhouette': f"{silhouette:.3f}",
+            'Cluster Sizes': cluster_sizes_str
         })
-    
+
     return pd.DataFrame(metrics_data)
 
 def add_sidebar_info():

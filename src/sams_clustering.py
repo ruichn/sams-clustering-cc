@@ -222,6 +222,55 @@ class SAMS_Clustering:
         adaptive_size = min(adaptive_size, max_size)  # Never exceed max_size
         
         return adaptive_size
+
+    def fit(self, Y):
+        """
+        FIXED SAMS clustering with performance optimizations
+        """
+        Y = np.array(Y)
+        n_samples, n_features = Y.shape
+        modes = Y.copy()
+
+        eta_0 = 0.001
+        eta_1 = 10000000000
+        b = 1
+        gamma = 1 / np.maximum(np.arange(0, self.max_iter), 1) ** (0.51)
+        beta = 1 / np.arange(0, self.max_iter) ** (0.51)
+        
+        # Compute bandwidth
+        if self.bandwidth is None:
+            self.bandwidth = self.compute_data_driven_bandwidth(Y)
+        
+        # Compute sample fraction if automatic
+        if self.sample_fraction is None:
+            self.sample_fraction = self.compute_automatic_sample_fraction(Y)
+            print(f"Automatic sample fraction selected: {self.sample_fraction*100:.2f}%")
+
+        base_sample_size = int(self.sample_fraction * n_samples)
+        base_sample_size = max(base_sample_size, 10)  # Minimum 10 samples
+        base_sample_size = min(base_sample_size, n_samples // 10)
+
+        for i in range(n_samples):
+            for iteration in range(self.max_iter):
+                sample_fraction = self.compute_automatic_sample_fraction(modes)
+                base_sample_size = int(sample_fraction * n_samples)
+                base_sample_size = max(base_sample_size, 10)  # Minimum 10 samples
+                base_sample_size = min(base_sample_size, n_samples // 10)
+                sample_indices = np.random.choice(n_samples, base_sample_size * 2, replace=False)
+                sample_data = modes[sample_indices]
+                sample_data_A = sample_data[:base_sample_size]
+                sample_data_B = sample_data[base_sample_size:]
+                A = np.mean(self.bandwidth ** (-(n_features + 2)) * self.gaussian_kernel(sample_data_A, modes[i], self.bandwidth).reshape(-1, 1) * (sample_data_A - modes[i]), 0)
+                B = np.mean(self.bandwidth ** (-(n_features + 2)) * self.gaussian_kernel(sample_data_B, modes[i], self.bandwidth))
+                b = b + beta[iteration] * (B - b)
+                b = min(max(b, eta_0), eta_1)
+                modes[i] = modes[i] + gamma[iteration] * A / b
+        
+        labels = self._assign_clusters_optimized(modes)
+        unique_modes = self._get_unique_modes(modes, labels)
+        
+        return labels, unique_modes
+    
     
     def fit_predict(self, X):
         """
